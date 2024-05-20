@@ -1,63 +1,79 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
+import string
+import pdb
+# might not need depending on view in console
+from IPython.display import clear_output 
 
 class Board:
 
-    def __init__(self,size = 9):
+    def __init__(self, size = 9):
         self.size = size
-        self.fence_spots = self.size - 1
+        self.fence_spots = size - 1
         self.total_board_size = size + self.fence_spots
         self.player1 = "placeholder"
         self.player2 = "placeholder2"
 
-        self.columns = [chr(i) for i in range(ord('A'),ord('Z')+1)][0:self.size]
-        self.locations = []
-        for each in self.columns:
-            for i in range(1,self.size + 1):
-                self.locations.append(f'{each}{i}')
-        self.display = self.create_display(size) # write to var for use in other functions
+        self.columns = string.ascii_uppercase[0:self.size]
         
-    def create_display(self,size):
+        # JF TODO: Think about how this way to store location will work 
+        #          (or not work) when you need to add fences to the game
+        self.locations = [f'{each}{i}' for each in self.columns 
+                                       for i in range(1, self.size + 1)]
+
+        # write to var for use in other functions
+        self.display = self.create_display() 
+        
+    def create_display(self):
+        
         display = []
+        
+        # JF TODO: will these 11s work if you change the size of the board?
         display.append(list(' '*11+'     '.join(self.columns)))
-        for i in range(1,self.size+1):
-            display.append(list(f'''        '''+'—————'.join("|"*(self.size+1))))
-            display.append(list(f'''     {i}  '''+'     '.join("|"*(self.size+1))+f''' {i}'''))
-        display.append(list(f'''        '''+'—————'.join("|"*(self.size+1))))
+        
+        for i in range(1, self.size+1):
+            display.append(list(f'        '+'—————'.join('|'*(self.size+1))))
+            display.append(list(f'     {i}  '+
+                           '     '.join('|'*(self.size+1))+f' {i}'))
+            
+        display.append(list(f'        '+'—————'.join('|'*(self.size+1))))
         display.append(list(' '*11+'     '.join(self.columns)))          
+
         return display
 
     def show_display(self):
-        for i in range(0,self.size*2 + 2):
-            print("".join(self.display[i]))
+        for i in range(0, self.size*2+2):
+            print(''.join(self.display[i]))
      
     def update_display(self):
-        # Clear out player's old location on the display
-        p1srow = self.player1.starting_location[1]
-        p1scol = ord(self.player1.starting_location[0])-64
-        p2srow = self.player2.starting_location[1]
-        p2scol =  ord(self.player2.starting_location[0])-64
-        self.display[int(p1srow)*2][5+6*(p1scol)]= " "
-        self.display[int(p2srow)*2][5+6*(p2scol)]= " "
         
-        # Set player's current location on display to their marker
-        p1row = self.player1.location[1]
-        p1col = ord(self.player1.location[0])-64
-        p2row = self.player2.location[1]
-        p2col =  ord(self.player2.location[0])-64
-        self.display[int(p1row)*2][5+6*(p1col)]= self.player1.marker
-        self.display[int(p2row)*2][5+6*(p2col)]= self.player2.marker
+        # JF NOTE: I refactored this so you can see how you can
+        #          use abstraction to avoid repeating code,
+        #          i.e. DRY (Don't Repeat Yourself)
+        
+        players_to_update = [self.player1, self.player2]
+        
+        for player_to_update in players_to_update:
+            
+            # JF TODO: Do you need to keep track of both
+            #          starting_location and location?
+            #          If not, you could simplify the code
+            
+            # Clear out player's old location on the display
+            p1srow = player_to_update.starting_location[1]
+            p1scol = ord(player_to_update.starting_location[0])-64
+            self.display[int(p1srow)*2][5+6*(p1scol)]= " "
+        
+            # Set player's current location on display to their marker
+            p1row = player_to_update.location[1]
+            p1col = ord(player_to_update.location[0])-64
+            self.display[int(p1row)*2][5+6*(p1col)]= player_to_update.marker
 
-        # label player's current location as starting location (for future moves)
-        self.player1.starting_location = self.player1.location
-        self.player2.starting_location = self.player2.location
+            # label player's current location as starting location 
+            # (for future moves)
+            player_to_update.starting_location = player_to_update.location
 
 class Player:
 
-    def __init__(self, name, marker = "A", location = "A2", fences = 10, turn = False):
+    def __init__(self, name, location = "A2", fences = 10, turn = False):
         self.name = name
         self.marker = '\u25A1'
         self.fences = fences
@@ -68,71 +84,115 @@ class Player:
         self.board = ""
 
     def __str__(self):
-        return f'''{self.name}, location {self.location}, {self.fences_remaining} fences remaining{", their turn" if self.turn else ""}.'''
+        
+        # JF TODO: rewrite line so it's not > 80 characters
+        # HINT: don't use f'', use str.format...
+        #       f'' are meant to be used where it's concise
+        
+        return f'{self.name}, location {self.location}, {self.fences_remaining} fences remaining{", their turn" if self.turn else ""}.'
 
     def move_piece(self):
         # display board
         self.board.show_display()
         
-        self.move_options = {"left":"", "right":"", "up":"", "down":""}
+        # JF Note: you only need self if you are going
+        #          to use the variable outside the method
         
-        # Store starting location (to remove marker from display after they move)
+        move_options = {"left":"", "right":"", "up":"", "down":""}
+        
+        # Store starting location 
+        # (to remove marker from display after they move)
         self.starting_location = self.location
+        
+        
+        # JF TODO: If you stored your locations as integers, 
+        #          could you simplify this code?
+        # HINT: if self.location[x] - 1 < 0: can play move left?
+        #       if self.location[y] + 1 > board_size: can play move down?
+        # JF TODO: also, make < 80 characters per line
         
         # Can you move left?
         if not self.location[0] == "A":
             ##### Jordan must check if fence blocked before the next line
-            self.move_options.update({"left":chr(ord(self.location[0]) - 1)+self.location[1]})
+            move_options.update({"left":chr(ord(self.location[0]) - 1)+self.location[1]})
         else:
-            self.move_options.update({"left":None})
+            move_options.update({"left":None})
         # Can you move right?
         if not self.location[0] == self.board.columns[-1]:
             ##### Jordan must check if fence blocked before the next line            
-            self.move_options.update({"right":chr(ord(self.location[0]) + 1)+self.location[1]})
+            move_options.update({"right":chr(ord(self.location[0]) + 1)+self.location[1]})
         else:
-            self.move_options.update({"right":None})
+            move_options.update({"right":None})
         # Can you move up?
         if not self.location[1] == "1":
             ##### Jordan must check if fence blocked before the next line
-            self.move_options.update({"up":self.location[0]+chr(ord(self.location[1]) - 1)})
+            move_options.update({"up":self.location[0]+chr(ord(self.location[1]) - 1)})
         else:
-            self.move_options.update({"up":None})
+            move_options.update({"up":None})
         # Can you move down?
         if not self.location[1] == str(len(self.board.columns)):
             ##### Jordan must check if fence blocked before the next line
-            self.move_options.update({"down":self.location[0]+chr(ord(self.location[1]) + 1)})
+            move_options.update({"down":self.location[0]+chr(ord(self.location[1]) + 1)})
         else:
-            self.move_options.update({"down":None})
+            move_options.update({"down":None})
 
-        # keep asking until it's not the player's turn
-        moved = False
+        # JF Note: refactoring below code as example of
+        #          DRY principle
+        
+        input_options = {'left': ['left', 'l', 4],
+                         'right': ['right', 'r', 6],
+                         'up': ['up', 'u', 8],
+                         'down': ['down', 'd', 2]}
+        
+        option_template = '\t> {} to {} (enter {}, {}, or {})'
+        
         while True:
-            move_choice = input(f'''\nWhere would you like to move? \n 
-            {'> Left to ' + f'{self.move_options["left"]} (enter "left", "l", or "4")' if self.move_options["left"] is not None else "(can't move left)"}
-            {'> Right to ' + f'{self.move_options["right"]} (enter "right", "r", or "6")' if self.move_options["right"] is not None else "(can't move right)"}
-            {'> Up to ' + f'{self.move_options["up"]} (enter "up", "u", or "8")' if self.move_options["up"] is not None else "(can't move up)"}
-            {'> Down to ' + f'{self.move_options["down"]} (enter "down", "d", or "2")' if self.move_options["down"] is not None else "(can't move down)"}
-            {'> Go back (enter "back" or "b")'}      ''')
-    
+            print('Where would you like to move?\n')
+            
+            for input_option in input_options.keys():
+                
+                capd_option = input_option.capitalize()
+                
+                if not move_options[input_option]:
+                    print(f'\t> Can\'t move {capd_option}')
+                else:
+                    
+                    strs_for_format = [capd_option, 
+                                       move_options[input_option], 
+                                       *input_options[input_option]]
+                    
+                    current_option = option_template.format(*strs_for_format)
+                    print(current_option)
+            
+            print('\n')    
+            move_choice = input('>>>')
+
             # Make the move
-                # ToDo: Check if lands on other player's location before return. implement the logic for them to jump over
-            if move_choice.lower() in ["back", "b"]:
+                # TODO: Check if lands on other player's location before return. 
+                #       implement the logic for them to jump over
+            
+            # JF TODO: Can you refactor this in a similar way
+            #          to the code I refactored just above?
+            # HINT: DRY!
+            
+            chosen_move = move_choice.lower()
+            if chosen_move in ["back", "b"]:
                 return False
-            elif move_choice.lower() in ["left", "l", "4"] and self.move_options["left"] is not None:
+            elif chosen_move in ["left", "l", "4"] and move_options["left"] is not None:
                 print("moving left")
-                self.location = f'{self.move_options["left"]}'
+                self.location = f'{move_options["left"]}'
                 return True
-            elif move_choice.lower() in ["right", "r", "6"] and self.move_options["right"] is not None:
+            elif move_choice.lower() in ["right", "r", "6"] and move_options["right"] is not None:
                 print("moving right")
-                self.location = f'{self.move_options["right"]}'
+                self.location = f'{move_options["right"]}'
                 return True
-            elif move_choice.lower() in ["down", "d", "2"] and self.move_options["down"] is not None:
+            elif move_choice.lower() in ["down", "d", "2"] and move_options["down"] is not None:
                 print("moving down")
-                self.location = f'{self.move_options["down"]}'
+                self.location = f'{move_options["down"]}'
                 return True
-            elif move_choice.lower() in ["up", "u", "8"] and self.move_options["up"] is not None:
+            elif move_choice.lower() in ["up", "u", "8"] and move_options["up"] is not None:
                 print("moving up")
-                self.location = f'{self.move_options["up"]}'
+                self.location = f'{move_options["up"]}'
                 return True
             else:
                 print("That is not a valid option. Please select again, .")
@@ -155,9 +215,9 @@ class Player:
             print("You have no more fences to place.")
             return False
 
-
-# In[ ]:
-
+# JF stopped here.
+# JF TODO: JL should try to refactor code below on his own!
+#          Where can you use DRY?
 
 class Quoridor():
     
@@ -271,12 +331,8 @@ class Quoridor():
         else:
             pass
 
-
-# In[ ]:
-
-
 # This is how to kick off a game from this file
-from IPython.display import clear_output # might not need depending on view in console
+
 game = Quoridor()
 game.game_setup()
 
