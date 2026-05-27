@@ -4,6 +4,7 @@
 # Load required packages
 import string
 import math
+from collections import deque
 from IPython.display import clear_output
 
 # 2 global functions: since A1 notation (a la chess) is likely most intuitive for players, but (r,c) format is more flexible for backend data processing, RCify() and A1ify() quickly convert a location to the necessary format. 
@@ -99,7 +100,43 @@ class Board:
                     fenceRow = self.vertical_pairs[each][0][i][0]
                     fenceCol = self.vertical_pairs[each][0][i][1]
                     self.display[fenceRow*2][2+6*(fenceCol)]= self.vertical_pairs[each][1].fencemarker
-                self.display[fenceRow*2-1][2+6*(fenceCol)]= self.vertical_pairs[each][1].fencemarker # add marker in-between 2 fences to show fence extends through 
+                self.display[fenceRow*2-1][2+6*(fenceCol)]= self.vertical_pairs[each][1].fencemarker # add marker in-between 2 fences to show fence extends through
+
+    def is_blocked(self, r, c, dr, dc):
+        hp = self.horizontal_pairs
+        vp = self.vertical_pairs
+        if dr == -1:  # moving up
+            return (hp.get((r, c),     [None, "empty"])[1] != "empty" or
+                    hp.get((r, c-1),   [None, "empty"])[1] != "empty")
+        if dr == 1:   # moving down
+            return (hp.get((r+1, c),   [None, "empty"])[1] != "empty" or
+                    hp.get((r+1, c-1), [None, "empty"])[1] != "empty")
+        if dc == -1:  # moving left
+            return (vp.get((r, c),     [None, "empty"])[1] != "empty" or
+                    vp.get((r-1, c),   [None, "empty"])[1] != "empty")
+        if dc == 1:   # moving right
+            return (vp.get((r, c+1),   [None, "empty"])[1] != "empty" or
+                    vp.get((r-1, c+1), [None, "empty"])[1] != "empty")
+
+    def has_path(self, start, goal_row):
+        queue = deque([start])
+        visited = set([start])
+        while queue:
+            r, c = queue.popleft()
+            if r == goal_row:
+                return True
+            for dr, dc in [(-1,0), (1,0), (0,-1), (0,1)]:
+                nr, nc = r + dr, c + dc
+                neighbor = (nr, nc)
+                if not (1 <= nr <= self.size and 1 <= nc <= self.size):
+                    continue
+                if neighbor in visited:
+                    continue
+                if self.is_blocked(r, c, dr, dc):
+                    continue
+                visited.add(neighbor)
+                queue.append(neighbor)
+        return False
 
 
 # define Player attributes and methods
@@ -343,6 +380,18 @@ class Player:
 
             def confirm_and_finalize(fence, orientation_text):
                 fence[1] = self
+                p1_ok = self.board.has_path(self.board.player1.location, goal_row=1)
+                p2_ok = self.board.has_path(self.board.player2.location, goal_row=self.board.size)
+                if not p1_ok or not p2_ok:
+                    fence[1] = "empty"
+                    if not p1_ok:
+                        trapped_name = self.board.player1.name
+                        trapped_goal = 1
+                    else:
+                        trapped_name = self.board.player2.name
+                        trapped_goal = self.board.size
+                    print(f"Can't place a fence {orientation_text}, as {trapped_name} must always have a path to reach row {trapped_goal}.")
+                    return None
                 self.board.update_display()
                 clear_output()
                 self.board.show_display()
@@ -515,16 +564,14 @@ Press any key to start the game with Player 1 going first (or enter "2" or "two"
         else:
             pass
 
-# End import
-raise Exception("when the objects file is called by Quoridor.py, it will stop reading here");
+if __name__ == "__main__":
+    # This is how to kick off a game from this file
+    from IPython.display import clear_output
+    game = Quoridor()
+    game.game_setup()
 
-# This is how to kick off a game from this file
-from IPython.display import clear_output # might not need depending on view in console
-game = Quoridor()
-game.game_setup()
-
-# debugging
-import sys
-import debugpy
-print(sys.executable)
-print("debugpy active")
+    # debugging
+    import sys
+    import debugpy
+    print(sys.executable)
+    print("debugpy active")
