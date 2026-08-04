@@ -4,3 +4,4 @@ __pycache__/
 Untitled*.ipynb
 Quoridor_objects_old.py
 test_bfs.py
+.venv/
