@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 from Quoridor_objects import QuoridorGame, RCify
 
-P0_MARKER = '□'  # □
-P1_MARKER = '○'  # ○
-FENCE     = '●'  # ●
+P0_MARKER = '□'  # □ — Player 1's piece
+P1_MARKER = '○'  # ○ — Player 2's piece
+P0_FENCE  = '■'  # ■ — Player 1's fences (filled version of their piece)
+P1_FENCE  = '●'  # ● — Player 2's fences (filled version of their piece)
 
 def marker_for(idx):
     return P0_MARKER if idx == 0 else P1_MARKER
 
+def fence_marker_for(idx):
+    return P0_FENCE if idx == 0 else P1_FENCE
+
 def render_board(state):
     size    = state["board_size"]
     players = state["players"]
-    h_set   = set(tuple(f) for f in state["fences"]["horizontal"])
-    v_set   = set(tuple(f) for f in state["fences"]["vertical"])
+    h_owner = {(r, c): owner for r, c, owner in state["fences"]["horizontal"]}
+    v_owner = {(r, c): owner for r, c, owner in state["fences"]["vertical"]}
     p0      = tuple(players[0]["location"])
     p1      = tuple(players[1]["location"])
     cols    = [chr(ord('A') + i) for i in range(size)]
@@ -26,16 +30,17 @@ def render_board(state):
         div = list('        ' + ('|' + '—————') * size + '|')
 
         # Horizontal fences: fence at (r, c) marks middle of seg c, the | between segs, middle of seg c+1
-        for (fr, fc) in h_set:
+        for (fr, fc), owner in h_owner.items():
             if fr == r:
-                div[5 + 6 * fc]       = FENCE
-                div[8 + 6 * fc]       = FENCE
-                div[5 + 6 * (fc + 1)] = FENCE
+                fm = fence_marker_for(owner)
+                div[5 + 6 * fc]       = fm
+                div[8 + 6 * fc]       = fm
+                div[5 + 6 * (fc + 1)] = fm
 
         # Vertical fences that span into this divider: vp[(r-1, c)] sits between rows r-1 and r
-        for (vr, vc) in v_set:
+        for (vr, vc), owner in v_owner.items():
             if vr == r - 1:
-                div[2 + 6 * vc] = FENCE
+                div[2 + 6 * vc] = fence_marker_for(owner)
 
         lines.append(''.join(div))
 
@@ -48,9 +53,9 @@ def render_board(state):
                 cell[5 + 6 * p[1]] = m
 
         # Vertical fence separators: vp[(r,c)] and vp[(r-1,c)] both touch row r
-        for (vr, vc) in v_set:
+        for (vr, vc), owner in v_owner.items():
             if vr == r or vr == r - 1:
-                cell[2 + 6 * vc] = FENCE
+                cell[2 + 6 * vc] = fence_marker_for(owner)
 
         lines.append(''.join(cell))
 
@@ -80,23 +85,32 @@ def do_move(game, player_index):
 
 
 def do_fence(game, player_index):
-    print("    Enter location + orientation, e.g. D5H or D5V  (or 'back'):")
     while True:
-        raw = input("    > ").strip().upper()
-        if raw in ('BACK', 'B'):
+        orient_raw = input("    Vertical or horizontal fence? (v/h, or 'back'): ").strip().lower()
+        if orient_raw in ('back', 'b'):
             return False
-        if len(raw) < 3 or raw[-1] not in ('H', 'V'):
-            print("    Format: column letter + row number + H or V  (e.g. D5H, C3V).")
+        if orient_raw not in ('h', 'v'):
+            print("    Enter 'v' for vertical or 'h' for horizontal.")
             continue
-        loc = RCify(raw[:-1], game.board.size)
-        if loc is None:
-            print("    That location isn't on the board.")
-            continue
-        row, col = loc
-        result = game.place_fence(player_index, row, col, raw[-1])
-        if result["ok"]:
-            return True
-        print(f"    {result['error']}")
+        orientation = orient_raw.upper()
+        orientation_word = "vertical" if orientation == "V" else "horizontal"
+
+        while True:
+            raw = input(f"    A {orientation_word} fence, at what location? "
+                        f"Reminder: fences will go at the top left corner of this location.  "
+                        f"(enter a location such as B3 or C4, or 'back')").strip().upper()
+            if raw in ('BACK', 'B'):
+                break  # back to choosing orientation
+            loc = RCify(raw, game.board.size)
+            if loc is None:
+                print("    That location isn't on the board.")
+                continue
+            row, col = loc
+            result = game.place_fence(player_index, row, col, orientation)
+            if result["ok"]:
+                return True
+            print(f"    {result['error']}")
+            continue  # same orientation, try another square
 
 
 def main():
@@ -113,10 +127,10 @@ def main():
     game = QuoridorGame(p1_name, p2_name, size=size, fences=fences)
 
     print(f"\nGet to the other side to win!")
-    print(f"{p1_name} ({P0_MARKER}) starts at the bottom and moves toward row 1.")
-    print(f"{p2_name} ({P1_MARKER}) starts at the top and moves toward row {size}.")
-    print(f"\nFences are placed by entering a square + direction, e.g. 'D5H' places a")
-    print(f"horizontal fence above D5–E5, and 'D5V' places a vertical fence left of D5–D6.")
+    print(f"{p1_name} ({P0_MARKER} piece / {P0_FENCE} fences) starts at the bottom and moves toward row 1.")
+    print(f"{p2_name} ({P1_MARKER} piece / {P1_FENCE} fences) starts at the top and moves toward row {size}.")
+    print(f"\nTo place a fence, you'll first choose vertical or horizontal, then a square —")
+    print(f"the fence is placed at that square's top left corner.")
     print(f"\nType 'q' at any prompt to quit.\n")
     print(render_board(game.serialize()))
 
@@ -132,10 +146,10 @@ def main():
         else:
             print(f"\n{player['name']} ({marker_for(idx)})'s turn — "
                   f"{player['fences_remaining']} fence(s) remaining.")
-            print("  1. Move   2. Place fence   q. Quit")
 
             action_done = False
             while not action_done:
+                print("  1. Move   2. Place fence   q. Quit")
                 choice = input("  > ").strip().lower()
                 if choice in ('q', 'quit', 'exit'):
                     raise SystemExit("Player quit.")

@@ -70,8 +70,8 @@ class Board:
                     vp.get((r-1, c+1), [None, None])[1] is not None)
 
     def serialize(self):
-        h = [[r, c] for (r, c), (_, owner) in self.horizontal_pairs.items() if owner is not None]
-        v = [[r, c] for (r, c), (_, owner) in self.vertical_pairs.items() if owner is not None]
+        h = [[r, c, owner] for (r, c), (_, owner) in self.horizontal_pairs.items() if owner is not None]
+        v = [[r, c, owner] for (r, c), (_, owner) in self.vertical_pairs.items() if owner is not None]
         return {"horizontal": h, "vertical": v}
 
     def has_path(self, start, goal_row):

@@ -61,7 +61,7 @@ def test_serialize_shape():
     assert "players" in state
     assert "fences" in state
     assert len(state["fences"]["horizontal"]) == 1
-    assert state["fences"]["horizontal"][0] == [5, 5]
+    assert state["fences"]["horizontal"][0] == [5, 5, 0]
     print("PASS: serialize shape")
 
 if __name__ == "__main__":
