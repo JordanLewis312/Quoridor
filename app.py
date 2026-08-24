@@ -3,13 +3,33 @@
 Stage 2: adds the create-game endpoint.
 """
 import uuid
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field, field_validator, field_validator
 from Quoridor_objects import QuoridorGame
 
 app = FastAPI()
 
+# TODO: once the frontend has a real hosted address, replace "*" with that
+# specific origin (e.g. "https://quoridor-frontend.onrender.com") instead
+# of allowing every origin.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 games: dict[str, QuoridorGame] = {}  # game_id -> QuoridorGame, held in server memory
+
+
+def get_game(game_id: str) -> QuoridorGame:
+    """Look up a game by ID, or raise a clean 404 instead of a raw KeyError."""
+    game = games.get(game_id)
+    if game is None:
+        raise HTTPException(status_code=404, detail=f"No game found with ID '{game_id}'.")
+    return game
+
 
 @app.get("/health")
 def health():
@@ -17,10 +37,32 @@ def health():
 
 
 class CreateGameRequest(BaseModel):
-    player1_name: str
-    player2_name: str
+    player1_name: str = Field(min_length=1)
+    player2_name: str = Field(min_length=1)
     size: int = 9
     fences: int = 10
+
+    @field_validator("size", mode="before")
+    @classmethod
+    def validate_size(cls, v):
+        try:
+            v = int(v)
+        except (TypeError, ValueError):
+            v = None
+        if v is None or not (3 <= v <= 10):
+            raise ValueError("Board size (rows/columns) must be a number between 3 and 10 (default 9) - please try again.")
+        return v
+
+    @field_validator("fences", mode="before")
+    @classmethod
+    def validate_fences(cls, v):
+        try:
+            v = int(v)
+        except (TypeError, ValueError):
+            v = None
+        if v is None or not (1 <= v <= 15):
+            raise ValueError("Fences must be a whole number from 1 to 15 (default 10) - please try again.")
+        return v
 
 @app.post("/games")
 def create_game(req: CreateGameRequest):
@@ -30,7 +72,7 @@ def create_game(req: CreateGameRequest):
 
 @app.get("/games/{game_id}")
 def get_state(game_id: str):
-    return games[game_id].serialize()
+    return get_game(game_id).serialize()
 
 
 class MoveRequest(BaseModel):
@@ -39,7 +81,7 @@ class MoveRequest(BaseModel):
 
 @app.post("/games/{game_id}/move")
 def move(game_id: str, req: MoveRequest):
-    return games[game_id].move_piece(req.player_index, req.direction)
+    return get_game(game_id).move_piece(req.player_index, req.direction)
 
 
 class FenceRequest(BaseModel):
@@ -50,4 +92,4 @@ class FenceRequest(BaseModel):
 
 @app.post("/games/{game_id}/fence")
 def place_fence(game_id: str, req: FenceRequest):
-    return games[game_id].place_fence(req.player_index, req.row, req.col, req.orientation)
+    return get_game(game_id).place_fence(req.player_index, req.row, req.col, req.orientation)

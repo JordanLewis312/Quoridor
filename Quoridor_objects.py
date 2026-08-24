@@ -176,9 +176,9 @@ class QuoridorGame:
 
         if orientation == "H":
             if col == size:
-                return {"ok": False, "error": "Horizontal fence can't start on the last column."}
+                return {"ok": False, "error": "a horizontal fence can't start on the last column - it'd go off the board!"}
             if row == 1:
-                return {"ok": False, "error": "Horizontal fence above row 1 doesn't block anything."}
+                return {"ok": False, "error": "A horizontal fence above row 1 doesn't block anything."}
             pd = self.board.horizontal_pairs
             if (row, col) not in pd:
                 return {"ok": False, "error": "Invalid fence location."}
@@ -191,9 +191,9 @@ class QuoridorGame:
                 return {"ok": False, "error": "A perpendicular vertical fence crosses this placement."}
         else:
             if row == size:
-                return {"ok": False, "error": "Vertical fence can't start on the last row."}
+                return {"ok": False, "error": "a vertical fence can't start on the last row - it'd go off the board!"}
             if col == 1:
-                return {"ok": False, "error": "Vertical fence left of column 1 doesn't block anything."}
+                return {"ok": False, "error": "A vertical fence left of column 1 doesn't block anything."}
             pd = self.board.vertical_pairs
             if (row, col) not in pd:
                 return {"ok": False, "error": "Invalid fence location."}
