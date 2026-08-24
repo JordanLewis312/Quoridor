@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Quoridor</title>
+<style>
+  /* ---------- basic page styling ---------- */
+  /* Each player's color is defined once here, then referenced by name
+     everywhere else via var(--name). Change a color in exactly one
+     place and it updates the piece AND the fence together. */
+  :root {
+    --player0-color: #4da3ff;
+    --player1-color: #FF7F7F;
+  }
+
+  body {
+    font-family: sans-serif;
+    background: #1e1e1e;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem;
+  }
+
+  #status {
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+
+  /* #board is a CSS grid, alternating a thin "gutter" between
+     every pair of cells for fences Fences So the full grid
+     is (2N - 1) tracks wide and tall (2N - 1) tracks tall:
+ */
+  #board {
+    display: grid;
+    background: #444;
+    border: 3px solid #666;
+  }
+
+  .cell {
+    background: #C79377; /* board square color */
+  }
+
+  .gutter {
+    background: transparent; /* empty space unless a fence occupies it */
+  }
+
+  .fence {
+    border-radius: 2px;
+  }
+  .fence.owner-0 { background: var(--player0-color); } /* player 1's fences */
+  .fence.owner-1 { background: var(--player1-color); } /* player 2's fences */
+
+  .piece {
+    width: 70%;
+    height: 70%;
+    margin: 15%;
+    border-radius: 50%;
+    box-sizing: border-box;
+    border: 2px solid #222;
+  }
+  .piece.owner-0 { background: var(--player0-color); } /* player 1's piece */
+  .piece.owner-1 { background: var(--player1-color); } /* player 2's piece */
+
+  #players {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+  }
+  .player-card {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: 2px solid transparent;
+  }
+  .player-card.turn { border-color: #fff; }
+  .player-card.owner-0 { background: #2b3a4a; }
+  .player-card.owner-1 { background: #4a332b; }
+</style>
+</head>
+<body>
+
+  <h1>Quoridor</h1>
+  <div id="status"></div>
+  <div id="board"></div>
+  <div id="players"></div>
+
+<script>
+  // ---------------------------------------------------------------
+  // STEP 1 of the frontend build: render a board from data shaped
+  // EXACTLY like what GET /games/{game_id} already returns from
+  // app.py. Nothing here talks to the server yet -- "fakeState"
+  // below stands in for a real response. Swapping this for a real
+  // fetch() call later is a small change, not a rewrite.
+  // ---------------------------------------------------------------
+  const fakeState = {
+    board_size: 9,
+    current_player: 0,
+    status: "playing",
+    winner: null,
+    must_move_again: false,
+    players: [
+      { name: "Alice", location: [9, 5], fences_remaining: 8 },
+      { name: "Bob",   location: [2, 6], fences_remaining: 9 }
+    ],
+    fences: {
+      // each entry is [row, col, owner_index] -- same shape app.py returns
+      horizontal: [[5, 3, 0], [5, 7, 1]],
+      vertical:   [[3, 5, 0], [6, 2, 1]]
+    }
+  };
+
+  function renderBoard(state) {
+    const size = state.board_size;
+    const board = document.getElementById("board");
+    board.innerHTML = ""; // clear out anything from a previous render
+
+    // Build the interleaved track sizes: cell, gutter, cell, gutter, ... cell
+    const cellSize = "44px";
+    const gutterSize = "10px";
+    const tracks = [];
+    for (let i = 0; i < size; i++) {
+      tracks.push(cellSize);
+      if (i < size - 1) tracks.push(gutterSize);
+    }
+    board.style.gridTemplateColumns = tracks.join(" ");
+    board.style.gridTemplateRows = tracks.join(" ");
+
+    // A board cell (row r, col c) -- both 1-indexed like the server uses --
+    // sits at grid track (2r - 1, 2c - 1) once gutters are interleaved.
+    const cellTrack = (n) => 2 * n - 1;
+
+    // --- draw every board square ---
+    for (let r = 1; r <= size; r++) {
+      for (let c = 1; c <= size; c++) {
+        const div = document.createElement("div");
+        div.className = "cell";
+        div.style.gridRow = cellTrack(r);
+        div.style.gridColumn = cellTrack(c);
+        board.appendChild(div);
+      }
+    }
+
+    // --- draw both players' pieces ---
+    state.players.forEach((player, idx) => {
+      const [r, c] = player.location;
+      const piece = document.createElement("div");
+      piece.className = `piece owner-${idx}`;
+      piece.style.gridRow = cellTrack(r);
+      piece.style.gridColumn = cellTrack(c);
+      board.appendChild(piece);
+    });
+
+    // --- draw horizontal fences ---
+    // A horizontal fence at (row, col) sits in the gutter directly above
+    // "row", spanning across columns col and col+1 (3 tracks: cell,
+    // gutter, cell).
+    state.fences.horizontal.forEach(([row, col, owner]) => {
+      const fence = document.createElement("div");
+      fence.className = `fence owner-${owner}`;
+      fence.style.gridRow = cellTrack(row) - 1;             // the gutter row above it
+      fence.style.gridColumn = `${cellTrack(col)} / span 3`;
+      board.appendChild(fence);
+    });
+
+    // --- draw vertical fences ---
+    // A vertical fence at (row, col) sits in the gutter directly left of
+    // "col", spanning across rows row and row+1 (3 tracks).
+    state.fences.vertical.forEach(([row, col, owner]) => {
+      const fence = document.createElement("div");
+      fence.className = `fence owner-${owner}`;
+      fence.style.gridRow = `${cellTrack(row)} / span 3`;
+      fence.style.gridColumn = cellTrack(col) - 1;           // the gutter column left of it
+      board.appendChild(fence);
+    });
+  }
+
+  function renderStatus(state) {
+    document.getElementById("status").textContent =
+      state.status === "game_over"
+        ? `${state.winner} wins!`
+        : `${state.players[state.current_player].name}'s turn`;
+  }
+
+  function renderPlayers(state) {
+    const container = document.getElementById("players");
+    container.innerHTML = "";
+    state.players.forEach((player, idx) => {
+      const card = document.createElement("div");
+      card.className = `player-card owner-${idx}` + (idx === state.current_player ? " turn" : "");
+      card.textContent = `${player.name} — ${player.fences_remaining} fences left`;
+      container.appendChild(card);
+    });
+  }
+
+  function render(state) {
+    renderStatus(state);
+    renderBoard(state);
+    renderPlayers(state);
+  }
+
+  render(fakeState);
+</script>
+
+</body>
+</html>
