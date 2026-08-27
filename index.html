@@ -6,8 +6,7 @@
 <style>
   /* ---------- basic page styling ---------- */
   /* Each player's color is defined once here, then referenced by name
-     everywhere else via var(--name). Change a color in exactly one
-     place and it updates the piece AND the fence together. */
+     everywhere else via var(--name). */
   :root {
     --player0-color: #4da3ff;
     --player1-color: #FF7F7F;
@@ -81,35 +80,190 @@
 <body>
 
   <h1>Quoridor</h1>
-  <div id="status"></div>
-  <div id="board"></div>
-  <div id="players"></div>
+
+  <!-- Setup: create a new game or join an existing one by ID. Hidden once a game is active. -->
+  <div id="setup">
+    <div>
+      <h3>Create Game</h3>
+      <input id="new-p1" placeholder="Player 1 name">
+      <input id="new-p2" placeholder="Player 2 name">
+      <input id="new-size" type="number" placeholder="size (3-10)" value="9">
+      <input id="new-fences" type="number" placeholder="fences (1-15)" value="10">
+      <button onclick="createGame()">Create</button>
+    </div>
+    <div>
+      <h3>Join Game</h3>
+      <input id="join-id" placeholder="game id">
+      <input id="join-player-index" type="number" placeholder="your player index (0 or 1)" value="0">
+      <button onclick="joinGame()">Join</button>
+    </div>
+    <div id="setup-error" style="color:#ff8080;"></div>
+  </div>
+
+  <div id="game" style="display:none;">
+    <div id="game-id-display"></div>
+    <div id="status"></div>
+    <div id="board"></div>
+    <div id="players"></div>
+
+    <div id="controls">
+      <h3>Move</h3>
+      <button onclick="doMove('up')">Up</button>
+      <button onclick="doMove('down')">Down</button>
+      <button onclick="doMove('left')">Left</button>
+      <button onclick="doMove('right')">Right</button>
+
+      <h3>Place Fence</h3>
+      <input id="fence-row" type="number" placeholder="row">
+      <input id="fence-col" type="number" placeholder="col">
+      <select id="fence-orientation">
+        <option value="H">Horizontal</option>
+        <option value="V">Vertical</option>
+      </select>
+      <button onclick="doFence()">Place Fence</button>
+    </div>
+    <div id="action-error" style="color:#ff8080;"></div>
+  </div>
 
 <script>
   // ---------------------------------------------------------------
-  // STEP 1 of the frontend build: render a board from data shaped
-  // EXACTLY like what GET /games/{game_id} already returns from
-  // app.py. Nothing here talks to the server yet -- "fakeState"
-  // below stands in for a real response. Swapping this for a real
-  // fetch() call later is a small change, not a rewrite.
+  // API wiring. Same-origin by default (index.html served by app.py
+  // itself via StaticFiles) -- set API_BASE if serving this file
+  // some other way (e.g. opening it directly as a file:// URL).
   // ---------------------------------------------------------------
-  const fakeState = {
-    board_size: 9,
-    current_player: 0,
-    status: "playing",
-    winner: null,
-    must_move_again: false,
-    players: [
-      { name: "Alice", location: [9, 5], fences_remaining: 8 },
-      { name: "Bob",   location: [2, 6], fences_remaining: 9 }
-    ],
-    fences: {
-      // each entry is [row, col, owner_index] -- same shape app.py returns
-      horizontal: [[5, 3, 0], [5, 7, 1]],
-      vertical:   [[3, 5, 0], [6, 2, 1]]
-    }
-  };
+  const API_BASE = "";
+  let gameId = null;
+  let myPlayerIndex = 0;
+  let pollHandle = null;
 
+  async function apiCall(path, options) {
+    const res = await fetch(API_BASE + path, options);
+    let body = null;
+    try { body = await res.json(); } catch (e) { /* no body */ }
+    if (!res.ok) {
+      // FastAPI validation errors (422) come back as {"detail": [...]}
+      // or {"detail": "message"} for our HTTPException 404s.
+      const detail = body && body.detail;
+      const message = Array.isArray(detail)
+        ? detail.map(d => d.msg).join("; ")
+        : (detail || `Request failed (${res.status})`);
+      throw new Error(message);
+    }
+    return body;
+  }
+
+  async function createGame() {
+    document.getElementById("setup-error").textContent = "";
+    try {
+      const body = await apiCall("/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          player1_name: document.getElementById("new-p1").value,
+          player2_name: document.getElementById("new-p2").value,
+          size: Number(document.getElementById("new-size").value),
+          fences: Number(document.getElementById("new-fences").value),
+        }),
+      });
+      gameId = body.game_id;
+      myPlayerIndex = 0; // creator plays as player 0
+      enterGame(body.state);
+    } catch (err) {
+      document.getElementById("setup-error").textContent = err.message;
+    }
+  }
+
+  async function joinGame() {
+    document.getElementById("setup-error").textContent = "";
+    try {
+      const id = document.getElementById("join-id").value.trim();
+      const state = await apiCall(`/games/${id}`);
+      gameId = id;
+      myPlayerIndex = Number(document.getElementById("join-player-index").value);
+      enterGame(state);
+    } catch (err) {
+      document.getElementById("setup-error").textContent = err.message;
+    }
+  }
+
+  function enterGame(state) {
+    document.getElementById("setup").style.display = "none";
+    document.getElementById("game").style.display = "block";
+    document.getElementById("game-id-display").textContent = `Game ID: ${gameId} (you are player ${myPlayerIndex})`;
+    render(state);
+  }
+
+  // Poll only while we're actually waiting on something to change --
+  // i.e. it's the opponent's turn and the game isn't over. Our own
+  // moves/fences already re-render straight from their response, so
+  // there's nothing to catch by polling on our own turn.
+  function updatePolling(state) {
+    const waitingOnOpponent = state.status === "playing" && state.current_player !== myPlayerIndex;
+    if (waitingOnOpponent && !pollHandle) {
+      pollHandle = setInterval(refreshState, 5000);
+    } else if (!waitingOnOpponent && pollHandle) {
+      clearInterval(pollHandle);
+      pollHandle = null;
+    }
+  }
+
+  async function refreshState() {
+    try {
+      const state = await apiCall(`/games/${gameId}`);
+      render(state);
+    } catch (err) {
+      document.getElementById("action-error").textContent = err.message;
+    }
+  }
+
+  async function doMove(direction) {
+    document.getElementById("action-error").textContent = "";
+    try {
+      const result = await apiCall(`/games/${gameId}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_index: myPlayerIndex, direction }),
+      });
+      if (!result.ok) {
+        document.getElementById("action-error").textContent = result.error;
+      } else {
+        render(result.state);
+      }
+    } catch (err) {
+      document.getElementById("action-error").textContent = err.message;
+    }
+  }
+
+  async function doFence() {
+    document.getElementById("action-error").textContent = "";
+    try {
+      const result = await apiCall(`/games/${gameId}/fence`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          player_index: myPlayerIndex,
+          row: Number(document.getElementById("fence-row").value),
+          col: Number(document.getElementById("fence-col").value),
+          orientation: document.getElementById("fence-orientation").value,
+        }),
+      });
+      if (!result.ok) {
+        document.getElementById("action-error").textContent = result.error;
+      } else {
+        render(result.state);
+      }
+    } catch (err) {
+      document.getElementById("action-error").textContent = err.message;
+    }
+  }
+</script>
+
+<script>
+  // ---------------------------------------------------------------
+  // Rendering. Consumes real state from GET/POST /games responses
+  // (see apiCall functions above) -- this shape is defined by
+  // QuoridorGame.serialize() in Quoridor_objects.py.
+  // ---------------------------------------------------------------
   function renderBoard(state) {
     const size = state.board_size;
     const board = document.getElementById("board");
@@ -197,9 +351,8 @@
     renderStatus(state);
     renderBoard(state);
     renderPlayers(state);
+    updatePolling(state);
   }
-
-  render(fakeState);
 </script>
 
 </body>
