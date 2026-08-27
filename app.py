@@ -2,10 +2,12 @@
 """
 Stage 2: adds the create-game endpoint.
 """
+import os
 import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, field_validator, field_validator
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field, field_validator
 from Quoridor_objects import QuoridorGame
 
 app = FastAPI()
@@ -34,6 +36,13 @@ def get_game(game_id: str) -> QuoridorGame:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/")
+def serve_frontend():
+    """Serve the static frontend so the browser and API share one origin
+    (one Render web service, no CORS headaches for the deployed version)."""
+    return FileResponse(os.path.join(os.path.dirname(__file__), "index.html"))
 
 
 class CreateGameRequest(BaseModel):
@@ -69,6 +78,17 @@ def create_game(req: CreateGameRequest):
     game_id = uuid.uuid4().hex[:8]  # short random id, e.g. "a3f9c21b"
     games[game_id] = QuoridorGame(req.player1_name, req.player2_name, size=req.size, fences=req.fences)
     return {"game_id": game_id, "state": games[game_id].serialize()}
+
+
+@app.get("/games")
+def list_games():
+    return {
+        game_id: {
+            "players": [p["name"] for p in game.players],
+            "status": game.status,
+        }
+        for game_id, game in games.items()
+    }
 
 @app.get("/games/{game_id}")
 def get_state(game_id: str):
