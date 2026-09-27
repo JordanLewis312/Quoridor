@@ -9,8 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from Quoridor_objects import QuoridorGame
+import storage
 
 app = FastAPI()
+storage.init_db()
 
 # TODO: once the frontend has a real hosted address, replace "*" with that
 # specific origin (e.g. "https://quoridor-frontend.onrender.com") instead
@@ -22,15 +24,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-games: dict[str, QuoridorGame] = {}  # game_id -> QuoridorGame, held in server memory
 
-
-def get_game(game_id: str) -> QuoridorGame:
-    """Look up a game by ID, or raise a clean 404 instead of a raw KeyError."""
-    game = games.get(game_id)
-    if game is None:
+def load_state_or_404(game_id: str) -> dict:
+    """Look up a game's stored state by ID, or raise a clean 404 instead of
+    letting a missing row surface as nothing/None further down."""
+    state = storage.load(game_id)
+    if state is None:
         raise HTTPException(status_code=404, detail=f"No game found with ID '{game_id}'.")
-    return game
+    return state
 
 
 @app.get("/health")
@@ -76,23 +77,24 @@ class CreateGameRequest(BaseModel):
 @app.post("/games")
 def create_game(req: CreateGameRequest):
     game_id = uuid.uuid4().hex[:8]  # short random id, e.g. "a3f9c21b"
-    games[game_id] = QuoridorGame(req.player1_name, req.player2_name, size=req.size, fences=req.fences)
-    return {"game_id": game_id, "state": games[game_id].serialize()}
+    game = QuoridorGame(req.player1_name, req.player2_name, size=req.size, fences=req.fences)
+    storage.save(game_id, game.serialize())
+    return {"game_id": game_id, "state": game.serialize()}
 
 
 @app.get("/games")
 def list_games():
     return {
         game_id: {
-            "players": [p["name"] for p in game.players],
-            "status": game.status,
+            "players": [p["name"] for p in state["players"]],
+            "status": state["status"],
         }
-        for game_id, game in games.items()
+        for game_id, state in storage.list_all().items()
     }
 
 @app.get("/games/{game_id}")
 def get_state(game_id: str):
-    return get_game(game_id).serialize()
+    return load_state_or_404(game_id)
 
 
 class MoveRequest(BaseModel):
@@ -101,7 +103,11 @@ class MoveRequest(BaseModel):
 
 @app.post("/games/{game_id}/move")
 def move(game_id: str, req: MoveRequest):
-    return get_game(game_id).move_piece(req.player_index, req.direction)
+    game = QuoridorGame.from_state(load_state_or_404(game_id))
+    result = game.move_piece(req.player_index, req.direction)
+    if result["ok"]:
+        storage.save(game_id, result["state"])
+    return result
 
 
 class FenceRequest(BaseModel):
@@ -112,4 +118,8 @@ class FenceRequest(BaseModel):
 
 @app.post("/games/{game_id}/fence")
 def place_fence(game_id: str, req: FenceRequest):
-    return get_game(game_id).place_fence(req.player_index, req.row, req.col, req.orientation)
+    game = QuoridorGame.from_state(load_state_or_404(game_id))
+    result = game.place_fence(req.player_index, req.row, req.col, req.orientation)
+    if result["ok"]:
+        storage.save(game_id, result["state"])
+    return result

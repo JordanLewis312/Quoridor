@@ -230,3 +230,31 @@ class QuoridorGame:
             ],
             "fences": self.board.serialize(),
         }
+
+    @classmethod
+    # Rebuild a live QuoridorGame from the serialize() gamestate
+    def from_state(cls, state):
+        game = cls.__new__(cls)
+        size = state["board_size"]
+
+        game.board = Board(size=size)
+        game.board.create_fence_locations()
+        for row, col, owner in state["fences"]["horizontal"]:
+            game.board.horizontal_pairs[(row, col)][1] = owner
+        for row, col, owner in state["fences"]["vertical"]:
+            game.board.vertical_pairs[(row, col)][1] = owner
+
+        game.players = [
+            {
+                "name": p["name"],
+                "location": p["location"],
+                "fences_remaining": p["fences_remaining"],
+                "goal_row": 1 if idx == 0 else size,
+            }
+            for idx, p in enumerate(state["players"])
+        ]
+        game.current_player = state["current_player"]
+        game.status = state["status"]
+        game.winner = state["winner"]
+        game.must_move_again = state["must_move_again"]
+        return game

@@ -64,6 +64,21 @@ def test_serialize_shape():
     assert state["fences"]["horizontal"][0] == [5, 5, 0]
     print("PASS: serialize shape")
 
+def test_from_state_roundtrip():
+    game = QuoridorGame("Alice", "Bob")
+    game.move_piece(0, "up")
+    game.place_fence(1, 5, 5, "H")
+    state = game.serialize()
+
+    rebuilt = QuoridorGame.from_state(state)
+    assert rebuilt.serialize() == state, "Rebuilt game should serialize back to the exact same state"
+
+    # Confirm the rebuilt object is actually functional, not just data-equal --
+    # it needs to support further moves/fences the same as the original.
+    result = rebuilt.move_piece(0, "left")
+    assert result["ok"], f"Rebuilt game should support further moves: {result}"
+    print("PASS: from_state round-trip")
+
 if __name__ == "__main__":
     test_basic_move()
     test_wrong_turn()
@@ -71,4 +86,5 @@ if __name__ == "__main__":
     test_fence_cannot_trap_player()
     test_win_condition()
     test_serialize_shape()
+    test_from_state_roundtrip()
     print("\nAll tests passed.")
