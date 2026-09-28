@@ -102,14 +102,43 @@ class QuoridorGame:
         self.board = Board(size=size)
         self.board.create_fence_locations()
         mid = math.ceil(size / 2)
+        # "claimed" tracks whether a real person has joined that seat --
+        # the creator claims player 0 immediately; player 1 starts
+        # unclaimed even though it already has a (possibly placeholder)
+        # name, so a later join() knows whether it's still up for grabs.
+        # Player 0 (the creator) fixed at the top, aiming for the bottom;
+        # player 1 (the joiner) fixed at the bottom, aiming for the top.
         self.players = [
-            {"name": player1_name, "location": [size, mid], "fences_remaining": fences, "goal_row": 1},
-            {"name": player2_name, "location": [1,    mid], "fences_remaining": fences, "goal_row": size},
+            {"name": player1_name, "location": [1,    mid], "fences_remaining": fences, "goal_row": size, "claimed": True},
+            {"name": player2_name, "location": [size, mid], "fences_remaining": fences, "goal_row": 1, "claimed": False},
         ]
         self.current_player = 0
         self.status = "playing"
         self.winner = None
         self.must_move_again = False
+
+    def join(self, name):
+        """Match a joiner to a seat by name, or claim player 1's seat if
+        it's still open. "claimed_now" tells the caller whether anything
+        actually changed (a fresh claim) vs. a no-op rejoin match --
+        callers should only persist state on a fresh claim, so a plain
+        rejoin doesn't clobber a previous_state some other feature (e.g.
+        a future undo) is relying on."""
+        name = (name or "").strip()
+        p0, p1 = self.players
+
+        if name and name.lower() == p0["name"].lower():
+            return {"ok": True, "player_index": 0, "state": self.serialize(), "claimed_now": False}
+
+        if p1["claimed"]:
+            if name and name.lower() == p1["name"].lower():
+                return {"ok": True, "player_index": 1, "state": self.serialize(), "claimed_now": False}
+            return {"ok": False, "error": "This game already has two players."}
+
+        if name:
+            p1["name"] = name
+        p1["claimed"] = True
+        return {"ok": True, "player_index": 1, "state": self.serialize(), "claimed_now": True}
 
     def move_piece(self, player_index, direction):
         DIRECTIONS = {"up": (-1, 0), "down": (1, 0), "left": (0, -1), "right": (0, 1)}
@@ -215,7 +244,7 @@ class QuoridorGame:
 
         player["fences_remaining"] -= 1
         self._advance_turn()
-        return {"ok": True, "state": self.serialize()}
+        return {"ok": True, "state": self.serialize(), "location": A1ify((row, col))}
 
     def serialize(self):
         return {
@@ -225,7 +254,7 @@ class QuoridorGame:
             "winner":          self.winner,
             "must_move_again": self.must_move_again,
             "players": [
-                {"name": p["name"], "location": p["location"], "fences_remaining": p["fences_remaining"]}
+                {"name": p["name"], "location": p["location"], "fences_remaining": p["fences_remaining"], "claimed": p["claimed"]}
                 for p in self.players
             ],
             "fences": self.board.serialize(),
@@ -234,7 +263,8 @@ class QuoridorGame:
     @classmethod
     # Rebuild a live QuoridorGame from the serialize() gamestate
     def from_state(cls, state):
-        game = cls.__new__(cls)
+        game = cls.__new__(cls) # make empty QuoridorGame() without
+        # __init__, which sets initial game params
         size = state["board_size"]
 
         game.board = Board(size=size)
@@ -249,7 +279,8 @@ class QuoridorGame:
                 "name": p["name"],
                 "location": p["location"],
                 "fences_remaining": p["fences_remaining"],
-                "goal_row": 1 if idx == 0 else size,
+                "goal_row": size if idx == 0 else 1,
+                "claimed": p["claimed"],
             }
             for idx, p in enumerate(state["players"])
         ]

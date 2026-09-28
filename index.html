@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Quoridor</title>
 <style>
-  /* ---------- basic page styling ---------- */
+
   /* Each player's color is defined once here, then referenced by name
      everywhere else via var(--name). */
   :root {
@@ -31,10 +31,33 @@
      every pair of cells for fences Fences So the full grid
      is (2N - 1) tracks wide and tall (2N - 1) tracks tall:
  */
+  /* board-wrapper places the letter row and number column around the
+     board itself in a 2x2 outer grid: labels in row 1 / column 1,
+     the board in the bottom-right cell. */
+  #board-wrapper {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  #col-labels { grid-column: 2; grid-row: 1; display: grid; }
+  #row-labels { grid-column: 1; grid-row: 2; display: grid; }
+  #board      { grid-column: 2; grid-row: 2; }
+
+  .board-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: #aaa;
+    padding: 0 0.3rem;
+  }
+
   #board {
     display: grid;
     background: #444;
     border: 3px solid #666;
+    width: fit-content;
+    height: fit-content;
   }
 
   .cell {
@@ -73,8 +96,8 @@
     border: 2px solid transparent;
   }
   .player-card.turn { border-color: #fff; }
-  .player-card.owner-0 { background: #2b3a4a; }
-  .player-card.owner-1 { background: #4a332b; }
+  .player-card.owner-0 { background: var(--player0-color); }
+  .player-card.owner-1 { background: var(--player1-color); }
 </style>
 </head>
 <body>
@@ -85,8 +108,9 @@
   <div id="setup">
     <div>
       <h3>Create Game</h3>
-      <input id="new-p1" placeholder="Player 1 name">
-      <input id="new-p2" placeholder="Player 2 name">
+      <input id="new-p1" placeholder="Your Name">
+      <span> vs. </span>
+      <input id="new-p2" placeholder="Opponent's Name (optional)">
       <input id="new-size" type="number" placeholder="size (3-10)" value="9">
       <input id="new-fences" type="number" placeholder="fences (1-15)" value="10">
       <button onclick="createGame()">Create</button>
@@ -94,7 +118,7 @@
     <div>
       <h3>Join Game</h3>
       <input id="join-id" placeholder="game id">
-      <input id="join-player-index" type="number" placeholder="your player index (0 or 1)" value="0">
+      <input id="join-name" placeholder="Your Name (optional)">
       <button onclick="joinGame()">Join</button>
     </div>
     <div id="setup-error" style="color:#ff8080;"></div>
@@ -102,8 +126,14 @@
 
   <div id="game" style="display:none;">
     <div id="game-id-display"></div>
+    <button id="invite-link-btn" onclick="copyInviteLink()">Copy Invite Link</button>
+    <button onclick="leaveGame()">Leave Game</button>
     <div id="status"></div>
-    <div id="board"></div>
+    <div id="board-wrapper">
+      <div id="col-labels"></div>
+      <div id="row-labels"></div>
+      <div id="board"></div>
+    </div>
     <div id="players"></div>
 
     <div id="controls">
@@ -114,13 +144,18 @@
       <button onclick="doMove('right')">Right</button>
 
       <h3>Place Fence</h3>
-      <input id="fence-row" type="number" placeholder="row">
-      <input id="fence-col" type="number" placeholder="col">
+      <input id="fence-row" placeholder='row (e.g., "3"), or full location (e.g. "B3")'>
+      <input id="fence-col" placeholder='column (e.g., "B", or "2"), or blank if you entered full location in first box'>
       <select id="fence-orientation">
         <option value="H">Horizontal</option>
         <option value="V">Vertical</option>
       </select>
       <button onclick="doFence()">Place Fence</button>
+      <div id="fence-confirm" style="display:none; margin-top:0.5rem;">
+        <strong id="fence-confirm-text"></strong><br>
+        <button onclick="confirmFence()">Confirm</button>
+        <button onclick="cancelFence()">Cancel</button>
+      </div>
     </div>
     <div id="action-error" style="color:#ff8080;"></div>
   </div>
@@ -160,7 +195,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           player1_name: document.getElementById("new-p1").value,
-          player2_name: document.getElementById("new-p2").value,
+          player2_name: document.getElementById("new-p2").value.trim() || "Player 2",
           size: Number(document.getElementById("new-size").value),
           fences: Number(document.getElementById("new-fences").value),
         }),
@@ -177,19 +212,111 @@
     document.getElementById("setup-error").textContent = "";
     try {
       const id = document.getElementById("join-id").value.trim();
-      const state = await apiCall(`/games/${id}`);
+      const result = await apiCall(`/games/${id}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: document.getElementById("join-name").value }),
+      });
+      if (!result.ok) {
+        document.getElementById("setup-error").textContent = result.error;
+        return;
+      }
       gameId = id;
-      myPlayerIndex = Number(document.getElementById("join-player-index").value);
-      enterGame(state);
+      myPlayerIndex = result.player_index;
+      enterGame(result.state);
     } catch (err) {
       document.getElementById("setup-error").textContent = err.message;
+    }
+  }
+
+  // Remember which game/seat this browser is in, so a page refresh
+  // re-enters the same game instead of dumping you back at setup --
+  // wrapped in try/catch since localStorage can be unavailable (private
+  // browsing, blocked site data) and this is a convenience, not a
+  // requirement for the app to work.
+  function saveSession() {
+    try {
+      localStorage.setItem("quoridor_session", JSON.stringify({ gameId, myPlayerIndex }));
+    } catch (e) { /* not critical -- just won't survive a refresh this time */ }
+  }
+
+  function clearSession() {
+    try { localStorage.removeItem("quoridor_session"); } catch (e) { /* ignore */ }
+  }
+
+  function loadSession() {
+    try {
+      const raw = localStorage.getItem("quoridor_session");
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function leaveGame() {
+    clearSession();
+    location.href = location.pathname; // also drops any ?join=... query param
+  }
+
+  async function copyInviteLink() {
+    const link = `${location.origin}${location.pathname}?join=${gameId}`;
+    await navigator.clipboard.writeText(link);
+    const btn = document.getElementById("invite-link-btn");
+    const original = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  }
+
+  // Checked on page load, after tryResumeSession() finds nothing to
+  // resume. If the URL has ?join=<id>, join that game automatically with
+  // a blank name -- leaving whatever name is already there (the default
+  // "Player 2" or whatever the creator chose) and just marking it claimed.
+  async function tryJoinFromInviteLink() {
+    const joinId = new URLSearchParams(location.search).get("join");
+    if (!joinId) return false;
+    try {
+      const result = await apiCall(`/games/${joinId}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "" }),
+      });
+      if (!result.ok) {
+        document.getElementById("setup-error").textContent = result.error;
+        return false;
+      }
+      gameId = joinId;
+      myPlayerIndex = result.player_index;
+      enterGame(result.state);
+      return true;
+    } catch (err) {
+      document.getElementById("setup-error").textContent = err.message;
+      return false;
+    }
+  }
+
+  // Called once on page load. Returns true if it successfully re-entered
+  // a remembered game, false if there was nothing to resume (or it was
+  // stale/invalid) and the setup screen should show normally instead.
+  async function tryResumeSession() {
+    const session = loadSession();
+    if (!session) return false;
+    try {
+      const state = await apiCall(`/games/${session.gameId}`);
+      gameId = session.gameId;
+      myPlayerIndex = session.myPlayerIndex;
+      enterGame(state);
+      return true;
+    } catch (err) {
+      clearSession(); // game no longer exists or ID is bad -- don't keep retrying it
+      return false;
     }
   }
 
   function enterGame(state) {
     document.getElementById("setup").style.display = "none";
     document.getElementById("game").style.display = "block";
-    document.getElementById("game-id-display").textContent = `Game ID: ${gameId} (you are player ${myPlayerIndex})`;
+    document.getElementById("game-id-display").textContent = `Game ID: ${gameId} (you are ${state.players[myPlayerIndex].name})`;
+    saveSession();
     render(state);
   }
 
@@ -234,27 +361,126 @@
     }
   }
 
+  // Locks every control in #controls except the Confirm/Undo buttons
+  // themselves, so you can't move or start another fence mid-decision.
+  function setControlsDisabled(disabled) {
+    document.querySelectorAll("#controls button, #controls input, #controls select").forEach((el) => {
+      if (!el.closest("#fence-confirm")) {
+        el.disabled = disabled;
+      }
+    });
+  }
+
+  // Set while a fence preview is showing, awaiting Confirm/Cancel --
+  // holds exactly what gets sent to the real /fence endpoint on confirm.
+  let pendingFence = null;
+
+  // Accepts a row+column from the two fence-location boxes in whatever
+  // form they're filled in: a lone letter (column) and lone number (row)
+  // split across both boxes in either order, or a single combined value
+  // like "B3" (or "3B") in one box with the other left blank. Returns
+  // null if neither pattern matches.
+  function parseFenceLocation(rawA, rawB) {
+    const a = rawA.trim().toUpperCase();
+    const b = rawB.trim().toUpperCase();
+
+    const combined = (a && !b) ? a : (!a && b) ? b : null;
+    if (combined) {
+      const m = combined.match(/^([A-Z])(\d+)$/) || combined.match(/^(\d+)([A-Z])$/);
+      if (!m) return null;
+      const letter = /[A-Z]/.test(m[1]) ? m[1] : m[2];
+      const number = /[A-Z]/.test(m[1]) ? m[2] : m[1];
+      return { row: Number(number), col: letter.charCodeAt(0) - 64 };
+    }
+
+    // Both boxes filled separately. If one is a column letter, the other
+    // (whichever box) is the row number. If neither is a letter -- both
+    // are plain numbers -- there's no way to tell row from column except
+    // by position, so fall back to the boxes' natural order: first box
+    // is row, second is column.
+    const isLetter = (v) => /^[A-Z]$/.test(v);
+    const isNumber = (v) => /^\d+$/.test(v);
+
+    if (isLetter(a) && isNumber(b)) return { row: Number(b), col: a.charCodeAt(0) - 64 };
+    if (isLetter(b) && isNumber(a)) return { row: Number(a), col: b.charCodeAt(0) - 64 };
+    if (isNumber(a) && isNumber(b)) return { row: Number(a), col: Number(b) };
+    return null;
+  }
+
   async function doFence() {
+    document.getElementById("action-error").textContent = "";
+    const location = parseFenceLocation(
+      document.getElementById("fence-row").value,
+      document.getElementById("fence-col").value
+    );
+    if (!location) {
+      document.getElementById("action-error").textContent =
+        'Enter a row and column (e.g. "3" and "B"), or a full location like "B3" in one box.';
+      return;
+    }
+    const { row, col } = location;
+    const orientation = document.getElementById("fence-orientation").value;
+    try {
+      // /fence/preview runs the same legality checks as the real endpoint
+      // but never saves anything -- nothing here is visible to the
+      // opponent or advances the turn until Confirm is clicked.
+      const result = await apiCall(`/games/${gameId}/fence/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_index: myPlayerIndex, row, col, orientation }),
+      });
+      if (!result.ok) {
+        document.getElementById("action-error").textContent = result.error;
+        return;
+      }
+      // Show the hypothetical result without touching polling -- the
+      // preview state's turn has already "advanced" in the response, but
+      // nothing was actually saved, so polling must stay governed by the
+      // real state, not this preview.
+      renderStatus(result.state);
+      renderBoard(result.state);
+      renderPlayers(result.state);
+      pendingFence = { row, col, orientation };
+      const orientationLabel = orientation === "H" ? "Horizontal" : "Vertical";
+      document.getElementById("fence-confirm-text").textContent =
+        `${orientationLabel} fence placed at ${result.location}. Confirm, or cancel?`;
+      document.getElementById("fence-confirm").style.display = "block";
+      setControlsDisabled(true);
+    } catch (err) {
+      document.getElementById("action-error").textContent = err.message;
+    }
+  }
+
+  async function confirmFence() {
     document.getElementById("action-error").textContent = "";
     try {
       const result = await apiCall(`/games/${gameId}/fence`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          player_index: myPlayerIndex,
-          row: Number(document.getElementById("fence-row").value),
-          col: Number(document.getElementById("fence-col").value),
-          orientation: document.getElementById("fence-orientation").value,
-        }),
+        body: JSON.stringify({ player_index: myPlayerIndex, ...pendingFence }),
       });
       if (!result.ok) {
+        // Shouldn't normally happen since preview already validated this,
+        // but the board could in principle have changed in between.
         document.getElementById("action-error").textContent = result.error;
+        await refreshState();
       } else {
         render(result.state);
       }
     } catch (err) {
       document.getElementById("action-error").textContent = err.message;
+    } finally {
+      pendingFence = null;
+      document.getElementById("fence-confirm").style.display = "none";
+      setControlsDisabled(false);
     }
+  }
+
+  async function cancelFence() {
+    pendingFence = null;
+    document.getElementById("fence-confirm").style.display = "none";
+    setControlsDisabled(false);
+    await refreshState(); // nothing was ever saved -- just re-show the real state
   }
 </script>
 
@@ -283,6 +509,31 @@
     // A board cell (row r, col c) -- both 1-indexed like the server uses --
     // sits at grid track (2r - 1, 2c - 1) once gutters are interleaved.
     const cellTrack = (n) => 2 * n - 1;
+
+    // --- column letters above the board, row numbers to its left --
+    // same track sizes as the board itself, so each label lines up with
+    // its actual column/row regardless of board size.
+    const colLabels = document.getElementById("col-labels");
+    colLabels.innerHTML = "";
+    colLabels.style.gridTemplateColumns = tracks.join(" ");
+    for (let c = 1; c <= size; c++) {
+      const label = document.createElement("div");
+      label.className = "board-label";
+      label.style.gridColumn = cellTrack(c);
+      label.textContent = String.fromCharCode(64 + c); // 1 -> A, 2 -> B, ...
+      colLabels.appendChild(label);
+    }
+
+    const rowLabels = document.getElementById("row-labels");
+    rowLabels.innerHTML = "";
+    rowLabels.style.gridTemplateRows = tracks.join(" ");
+    for (let r = 1; r <= size; r++) {
+      const label = document.createElement("div");
+      label.className = "board-label";
+      label.style.gridRow = cellTrack(r);
+      label.textContent = r;
+      rowLabels.appendChild(label);
+    }
 
     // --- draw every board square ---
     for (let r = 1; r <= size; r++) {
@@ -330,10 +581,15 @@
   }
 
   function renderStatus(state) {
-    document.getElementById("status").textContent =
-      state.status === "game_over"
-        ? `${state.winner} wins!`
-        : `${state.players[state.current_player].name}'s turn`;
+    let text;
+    if (state.status === "game_over") {
+      text = `${state.winner} wins!`;
+    } else if (state.current_player === myPlayerIndex) {
+      text = "Your Turn";
+    } else {
+      text = `${state.players[state.current_player].name}'s turn`;
+    }
+    document.getElementById("status").textContent = text;
   }
 
   function renderPlayers(state) {
@@ -353,6 +609,14 @@
     renderPlayers(state);
     updatePolling(state);
   }
+
+  // Run once the page loads: if this browser was already in a game,
+  // re-enter it directly. Otherwise, check for an invite link. If
+  // neither applies, the setup screen just shows normally.
+  (async () => {
+    const resumed = await tryResumeSession();
+    if (!resumed) await tryJoinFromInviteLink();
+  })();
 </script>
 
 </body>

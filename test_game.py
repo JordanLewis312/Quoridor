@@ -2,9 +2,9 @@ from Quoridor_objects import QuoridorGame
 
 def test_basic_move():
     game = QuoridorGame("Alice", "Bob")
-    result = game.move_piece(0, "up")
+    result = game.move_piece(0, "down")
     assert result["ok"], f"Expected move to succeed: {result}"
-    assert game.players[0]["location"] == [8, 5], f"Unexpected location: {game.players[0]['location']}"
+    assert game.players[0]["location"] == [2, 5], f"Unexpected location: {game.players[0]['location']}"
     assert game.current_player == 1, "Turn should have advanced to player 2"
     print("PASS: basic move")
 
@@ -16,12 +16,12 @@ def test_wrong_turn():
 
 def test_fence_blocks_move():
     game = QuoridorGame("Alice", "Bob")
-    # Place a horizontal fence above row 9, col 5 — directly in Alice's path upward
-    result = game.place_fence(0, 9, 5, "H")
+    # Place a horizontal fence at row 2, col 5 — directly in Alice's path downward from her start
+    result = game.place_fence(0, 2, 5, "H")
     assert result["ok"], f"Expected fence placement to succeed: {result}"
-    # Now try to move Alice up through that fence
-    result = game.move_piece(1, "down")  # Bob moves first now
-    result = game.move_piece(0, "up")
+    # Now try to move Alice down through that fence
+    result = game.move_piece(1, "up")  # Bob moves first now
+    result = game.move_piece(0, "down")
     assert not result["ok"], "Expected move to be blocked by fence"
     assert "fence" in result["error"].lower(), f"Unexpected error: {result['error']}"
     print("PASS: fence blocks move")
@@ -44,10 +44,10 @@ def test_fence_cannot_trap_player():
 
 def test_win_condition():
     game = QuoridorGame("Alice", "Bob")
-    # Move Alice all the way to row 1
-    game.players[0]["location"] = [2, 5]  # shortcut her close to the goal
-    game.players[1]["location"] = [1, 1]  # move Bob out of Alice's path
-    result = game.move_piece(0, "up")
+    # Move Alice all the way to row 9 (her goal)
+    game.players[0]["location"] = [8, 5]  # shortcut her close to the goal
+    game.players[1]["location"] = [9, 1]  # move Bob out of Alice's path
+    result = game.move_piece(0, "down")
     assert result["ok"], f"Expected move to succeed: {result}"
     assert game.status == "game_over", "Expected game_over status"
     assert game.winner == "Alice", f"Expected Alice to win, got: {game.winner}"
@@ -66,7 +66,7 @@ def test_serialize_shape():
 
 def test_from_state_roundtrip():
     game = QuoridorGame("Alice", "Bob")
-    game.move_piece(0, "up")
+    game.move_piece(0, "down")
     game.place_fence(1, 5, 5, "H")
     state = game.serialize()
 

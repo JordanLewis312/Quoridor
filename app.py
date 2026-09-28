@@ -3,6 +3,7 @@
 Stage 2: adds the create-game endpoint.
 """
 import os
+import random
 import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -78,6 +79,9 @@ class CreateGameRequest(BaseModel):
 def create_game(req: CreateGameRequest):
     game_id = uuid.uuid4().hex[:8]  # short random id, e.g. "a3f9c21b"
     game = QuoridorGame(req.player1_name, req.player2_name, size=req.size, fences=req.fences)
+    # Seats and board sides are fixed (creator always top, joiner always
+    # bottom), but who moves first is randomized independently of that.
+    game.current_player = random.choice([0, 1])
     storage.save(game_id, game.serialize())
     return {"game_id": game_id, "state": game.serialize()}
 
@@ -95,6 +99,18 @@ def list_games():
 @app.get("/games/{game_id}")
 def get_state(game_id: str):
     return load_state_or_404(game_id)
+
+
+class JoinRequest(BaseModel):
+    name: str = ""
+
+@app.post("/games/{game_id}/join")
+def join_game(game_id: str, req: JoinRequest):
+    game = QuoridorGame.from_state(load_state_or_404(game_id))
+    result = game.join(req.name)
+    if result["ok"] and result["claimed_now"]:
+        storage.save(game_id, result["state"])
+    return result
 
 
 class MoveRequest(BaseModel):
@@ -116,6 +132,15 @@ class FenceRequest(BaseModel):
     col: int
     orientation: str
 
+@app.post("/games/{game_id}/fence/preview")
+def preview_fence(game_id: str, req: FenceRequest):
+    """Validate a fence placement without saving anything -- lets the
+    placing player see a real, legality-checked preview before it becomes
+    visible to their opponent or advances the turn."""
+    game = QuoridorGame.from_state(load_state_or_404(game_id))
+    return game.place_fence(req.player_index, req.row, req.col, req.orientation)
+
+
 @app.post("/games/{game_id}/fence")
 def place_fence(game_id: str, req: FenceRequest):
     game = QuoridorGame.from_state(load_state_or_404(game_id))
@@ -123,3 +148,15 @@ def place_fence(game_id: str, req: FenceRequest):
     if result["ok"]:
         storage.save(game_id, result["state"])
     return result
+
+
+# TODO: not yet called by the frontend -- kept for a future "undo my
+# completed last turn" feature. See storage.undo()'s docstring for why
+# this isn't what the fence-confirm flow ended up using.
+@app.post("/games/{game_id}/undo")
+def undo(game_id: str):
+    load_state_or_404(game_id)  # 404 if the game doesn't exist at all
+    state = storage.undo(game_id)
+    if state is None:
+        return {"ok": False, "error": "Nothing to undo."}
+    return {"ok": True, "state": state}
