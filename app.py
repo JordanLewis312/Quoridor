@@ -8,7 +8,7 @@ import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from Quoridor_objects import QuoridorGame
 import storage
 
@@ -44,11 +44,28 @@ def serve_frontend():
     return FileResponse(os.path.join(os.path.dirname(__file__), "index.html"))
 
 
+@app.get("/logo.svg")
+def serve_logo():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "logo.svg"))
+
+
+PLAYER_COLORS = {"blue", "red", "green", "yellow", "purple", "orange"}  # hex values live in index.html
+
 class CreateGameRequest(BaseModel):
     player1_name: str
     player2_name: str = Field(min_length=1)
     size: int = 9
     fences: int = 10
+    player1_color: str = "blue"
+    player2_color: str = "red"
+
+    @model_validator(mode="after")
+    def validate_colors(self):
+        if self.player1_color not in PLAYER_COLORS or self.player2_color not in PLAYER_COLORS:
+            raise ValueError("Unknown player color - please pick one from the list.")
+        if self.player1_color == self.player2_color:
+            raise ValueError("Both players picked the same color - please pick two different ones.")
+        return self
 
     @field_validator("player1_name")
     @classmethod
@@ -82,7 +99,8 @@ class CreateGameRequest(BaseModel):
 @app.post("/games")
 def create_game(req: CreateGameRequest):
     game_id = uuid.uuid4().hex[:8]  # short random id, e.g. "a3f9c21b"
-    game = QuoridorGame(req.player1_name, req.player2_name, size=req.size, fences=req.fences)
+    game = QuoridorGame(req.player1_name, req.player2_name, size=req.size, fences=req.fences,
+                        player1_color=req.player1_color, player2_color=req.player2_color)
     # Seats and board sides are fixed (creator always top, joiner always
     # bottom), but who moves first is randomized independently of that.
     game.current_player = random.choice([0, 1])

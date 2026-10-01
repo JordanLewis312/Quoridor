@@ -1,0 +1,13 @@
+<!-- Quoridor box-logo lettering, traced from "Quoridor font.png". Lettering by Gigamic / Mirko Marchesi. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 643 160" role="img" aria-label="Quoridor">
+  <g fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="square">
+    <path d="M73.25 158.25 V45.75 H1.75 V114.25 H73.25"/>  <!-- q -->
+    <path d="M98.75 45.75 V114.25 H170.25 V45.75"/>         <!-- u -->
+    <path d="M195.75 45.75 H267.25 V114.25 H195.75 Z"/>     <!-- o -->
+    <path d="M292.75 114.25 V45.75 H344.25"/>               <!-- r -->
+    <path d="M371.75 45.75 V114.25 M371.75 26 V26.5"/>      <!-- i -->
+    <path d="M470.25 1.75 V114.25 H398.75 V45.75 H470.25"/> <!-- d -->
+    <path d="M495.75 45.75 H567.25 V114.25 H495.75 Z"/>     <!-- o -->
+    <path d="M592.75 114.25 V45.75 H641.25"/>               <!-- r -->
+  </g>
+</svg>

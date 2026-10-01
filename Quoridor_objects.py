@@ -98,7 +98,7 @@ class Board:
 # define QuoridorGame class to manage game state and flow
 class QuoridorGame:
 
-    def __init__(self, player1_name, player2_name, size=9, fences=10):
+    def __init__(self, player1_name, player2_name, size=9, fences=10, player1_color="blue", player2_color="red"):
         self.board = Board(size=size)
         self.board.create_fence_locations()
         mid = math.ceil(size / 2)
@@ -109,8 +109,8 @@ class QuoridorGame:
         # Player 0 (the creator) fixed at the top, aiming for the bottom;
         # player 1 (the joiner) fixed at the bottom, aiming for the top.
         self.players = [
-            {"name": player1_name, "location": [1,    mid], "fences_remaining": fences, "goal_row": size, "claimed": True},
-            {"name": player2_name, "location": [size, mid], "fences_remaining": fences, "goal_row": 1, "claimed": False},
+            {"name": player1_name, "location": [1,    mid], "fences_remaining": fences, "goal_row": size, "claimed": True,  "color": player1_color},
+            {"name": player2_name, "location": [size, mid], "fences_remaining": fences, "goal_row": 1,    "claimed": False, "color": player2_color},
         ]
         self.current_player = 0
         self.status = "playing"
@@ -288,7 +288,7 @@ class QuoridorGame:
             "winner":          self.winner,
             "must_move_again": self.must_move_again,
             "players": [
-                {"name": p["name"], "location": p["location"], "fences_remaining": p["fences_remaining"], "claimed": p["claimed"]}
+                {"name": p["name"], "location": p["location"], "fences_remaining": p["fences_remaining"], "claimed": p["claimed"], "color": p["color"]}
                 for p in self.players
             ],
             "fences": self.board.serialize(),
@@ -316,6 +316,8 @@ class QuoridorGame:
                 "fences_remaining": p["fences_remaining"],
                 "goal_row": size if idx == 0 else 1,
                 "claimed": p["claimed"],
+                # older saved games have no color -- fall back to the originals
+                "color": p.get("color", "blue" if idx == 0 else "red"),
             }
             for idx, p in enumerate(state["players"])
         ]
