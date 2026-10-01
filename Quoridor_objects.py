@@ -116,6 +116,10 @@ class QuoridorGame:
         self.status = "playing"
         self.winner = None
         self.must_move_again = False
+        # Append-only record of every successful move/fence, for display
+        # and later analysis -- plain structured fields, not a formatted
+        # string, so nothing ever needs to be parsed back out of it.
+        self.history = []
 
     def join(self, name):
         """Match a joiner to a seat by name, or claim player 1's seat if
@@ -161,6 +165,24 @@ class QuoridorGame:
         if self.board.is_blocked(r, c, dr, dc):
             return {"ok": False, "error": f"Can't move {direction} — fence is blocking."}
 
+        # A bonus move (landing on the opponent) reuses the same turn
+        # number as the move that earned it, rather than starting a new one.
+        is_bonus = self.must_move_again
+        if is_bonus and self.history:
+            turn = self.history[-1]["turn"]
+        else:
+            turn = self.history[-1]["turn"] + 1 if self.history else 1
+        self.history.append({
+            "turn": turn,
+            "bonus": is_bonus,
+            "player_index": player_index,
+            "player_name": player["name"],
+            "action": "move",
+            "direction": direction,
+            "from": [r, c],
+            "to": [nr, nc],
+            "to_a1": A1ify((nr, nc)),
+        })
         player["location"] = [nr, nc]
 
         if [nr, nc] == opponent["location"]:
@@ -243,6 +265,18 @@ class QuoridorGame:
             return {"ok": False, "error": f"Can't place fence — {trapped} would have no path to their goal."}
 
         player["fences_remaining"] -= 1
+        turn = self.history[-1]["turn"] + 1 if self.history else 1
+        self.history.append({
+            "turn": turn,
+            "bonus": False,
+            "player_index": player_index,
+            "player_name": player["name"],
+            "action": "fence",
+            "orientation": orientation,
+            "row": row,
+            "col": col,
+            "location_a1": A1ify((row, col)),
+        })
         self._advance_turn()
         return {"ok": True, "state": self.serialize(), "location": A1ify((row, col))}
 
@@ -258,6 +292,7 @@ class QuoridorGame:
                 for p in self.players
             ],
             "fences": self.board.serialize(),
+            "history": self.history,
         }
 
     @classmethod
@@ -288,4 +323,7 @@ class QuoridorGame:
         game.status = state["status"]
         game.winner = state["winner"]
         game.must_move_again = state["must_move_again"]
+        # .get() with a default -- games saved before this feature existed
+        # won't have a "history" key at all.
+        game.history = state.get("history", [])
         return game

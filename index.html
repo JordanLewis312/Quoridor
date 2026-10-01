@@ -19,12 +19,85 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 2rem;
+    padding: 0.2rem 2rem 1rem; /* top, sides, bottom -- less space above than the other edges */
+  }
+
+  h1 {
+    margin: 0.1rem 0; /* browsers give h1 a large default margin -- shrink it */
+  }
+
+  h3 {
+    margin: 0.3rem 0 0.15rem; /* same idea, tighter above/below every section heading */
+  }
+
+  .primary-btn {
+    font-size: 1.2rem;
+    font-weight: bold;
+    padding: 0.5rem 1.5rem;
+    margin-top: 0.3rem; /* same small gap used elsewhere (h3 margins, etc.) */
+  }
+
+  #game-columns {
+    display: flex;
+    align-items: flex-start;
+    gap: 2rem;
+  }
+  #move-log {
+    min-width: 200px;
+  }
+  #move-log-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
   }
 
   #status {
-    margin-bottom: 1rem;
+    margin-bottom: 0.4rem;
     text-align: center;
+  }
+  #status.my-turn {
+    color: #4caf50;
+    font-size: 1.6rem;
+    font-weight: bold;
+  }
+  #status.game-over {
+    font-size: 3rem;
+    font-weight: 900;
+    background: linear-gradient(90deg, #ffd700, #ff6b6b, #4ecdc4, #ffd700);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 2s linear infinite, pop-in 0.4s ease-out;
+  }
+  @keyframes shimmer {
+    to { background-position: 200% center; }
+  }
+  @keyframes pop-in {
+    from { transform: scale(0.5); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  #confetti-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 1000;
+  }
+  .confetti-piece {
+    position: absolute;
+    top: -10px;
+    width: 10px;
+    height: 10px;
+    opacity: 0.9;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall {
+    to { top: 110%; transform: rotate(360deg); }
   }
 
   /* #board is a CSS grid, alternating a thin "gutter" between
@@ -88,7 +161,7 @@
   #players {
     display: flex;
     gap: 2rem;
-    margin-top: 1rem;
+    margin-top: 0.4rem;
   }
   .player-card {
     padding: 0.5rem 1rem;
@@ -103,6 +176,7 @@
 <body>
 
   <h1>Quoridor</h1>
+  <div id="confetti-container"></div>
 
   <!-- Setup: create a new game or join an existing one by ID. Hidden once a game is active. -->
   <div id="setup">
@@ -111,15 +185,19 @@
       <input id="new-p1" placeholder="Your Name">
       <span> vs. </span>
       <input id="new-p2" placeholder="Opponent's Name (optional)">
-      <input id="new-size" type="number" placeholder="size (3-10)" value="9">
-      <input id="new-fences" type="number" placeholder="fences (1-15)" value="10">
-      <button onclick="createGame()">Create</button>
+      <br>
+      <h3>Settings (optional)</h3>
+      <input id="new-size" type="number" placeholder="Size of board (default 9)">
+      <input id="new-fences" type="number" placeholder="# of fences (default 10)">
+      <br>
+      <button class="primary-btn" onclick="createGame()">Create</button>
     </div>
-    <div>
+    <div style="margin-top:1.2in;">
       <h3>Join Game</h3>
       <input id="join-id" placeholder="game id">
       <input id="join-name" placeholder="Your Name (optional)">
-      <button onclick="joinGame()">Join</button>
+      <br>
+      <button class="primary-btn" onclick="joinGame()">Join</button>
     </div>
     <div id="setup-error" style="color:#ff8080;"></div>
   </div>
@@ -129,35 +207,45 @@
     <button id="invite-link-btn" onclick="copyInviteLink()">Copy Invite Link</button>
     <button onclick="leaveGame()">Leave Game</button>
     <div id="status"></div>
-    <div id="board-wrapper">
-      <div id="col-labels"></div>
-      <div id="row-labels"></div>
-      <div id="board"></div>
-    </div>
-    <div id="players"></div>
 
-    <div id="controls">
-      <h3>Move</h3>
-      <button onclick="doMove('up')">Up</button>
-      <button onclick="doMove('down')">Down</button>
-      <button onclick="doMove('left')">Left</button>
-      <button onclick="doMove('right')">Right</button>
+    <div id="game-columns">
+      <div id="game-main">
+        <div id="message" style="display:none; color:#ffd27f; font-weight:bold;"></div>
+        <div id="fence-confirm-buttons" style="display:none;">
+          <button onclick="confirmFence()">Confirm</button>
+          <button onclick="cancelFence()">Cancel</button>
+        </div>
+        <button onclick="undoLastTurn()">Undo Last Turn</button>
+        <div id="board-wrapper">
+          <div id="col-labels"></div>
+          <div id="row-labels"></div>
+          <div id="board"></div>
+        </div>
+        <div id="players"></div>
 
-      <h3>Place Fence</h3>
-      <input id="fence-row" placeholder='row (e.g., "3"), or full location (e.g. "B3")'>
-      <input id="fence-col" placeholder='column (e.g., "B", or "2"), or blank if you entered full location in first box'>
-      <select id="fence-orientation">
-        <option value="H">Horizontal</option>
-        <option value="V">Vertical</option>
-      </select>
-      <button onclick="doFence()">Place Fence</button>
-      <div id="fence-confirm" style="display:none; margin-top:0.5rem;">
-        <strong id="fence-confirm-text"></strong><br>
-        <button onclick="confirmFence()">Confirm</button>
-        <button onclick="cancelFence()">Cancel</button>
+        <div id="controls">
+          <h3>Move</h3>
+          <button onclick="doMove('up')">Up</button>
+          <button onclick="doMove('down')">Down</button>
+          <button onclick="doMove('left')">Left</button>
+          <button onclick="doMove('right')">Right</button>
+
+          <h3>Place Fence</h3>
+          <input id="fence-row" placeholder='row (e.g., "3"), or full location (e.g. "B3")'>
+          <input id="fence-col" placeholder='column (e.g., "B", or "2"), or blank if you entered full location in first box'>
+          <select id="fence-orientation">
+            <option value="H">Horizontal</option>
+            <option value="V">Vertical</option>
+          </select>
+          <button onclick="doFence()">Place Fence</button>
+        </div>
+      </div>
+
+      <div id="move-log">
+        <h3>Move Log</h3>
+        <ul id="move-log-list"></ul>
       </div>
     </div>
-    <div id="action-error" style="color:#ff8080;"></div>
   </div>
 
 <script>
@@ -170,6 +258,8 @@
   let gameId = null;
   let myPlayerIndex = 0;
   let pollHandle = null;
+  let pollIntervalMs = null;
+  let lastKnownHistory = [];
 
   async function apiCall(path, options) {
     const res = await fetch(API_BASE + path, options);
@@ -179,8 +269,10 @@
       // FastAPI validation errors (422) come back as {"detail": [...]}
       // or {"detail": "message"} for our HTTPException 404s.
       const detail = body && body.detail;
+      // Pydantic prefixes custom validator messages with "Value error, " --
+      // strip it so our own friendly messages show cleanly.
       const message = Array.isArray(detail)
-        ? detail.map(d => d.msg).join("; ")
+        ? detail.map(d => d.msg.replace(/^Value error,\s*/, "")).join("; ")
         : (detail || `Request failed (${res.status})`);
       throw new Error(message);
     }
@@ -196,8 +288,8 @@
         body: JSON.stringify({
           player1_name: document.getElementById("new-p1").value,
           player2_name: document.getElementById("new-p2").value.trim() || "Player 2",
-          size: Number(document.getElementById("new-size").value),
-          fences: Number(document.getElementById("new-fences").value),
+          size: Number(document.getElementById("new-size").value) || 9,
+          fences: Number(document.getElementById("new-fences").value) || 10,
         }),
       });
       gameId = body.game_id;
@@ -320,17 +412,19 @@
     render(state);
   }
 
-  // Poll only while we're actually waiting on something to change --
-  // i.e. it's the opponent's turn and the game isn't over. Our own
-  // moves/fences already re-render straight from their response, so
-  // there's nothing to catch by polling on our own turn.
+  // Fast polling while waiting on the opponent's move, slower on our own
+  // turn (just a safety net to catch an opponent undoing their last turn
+  // after handing it back to us). Stops entirely once the game's over.
   function updatePolling(state) {
-    const waitingOnOpponent = state.status === "playing" && state.current_player !== myPlayerIndex;
-    if (waitingOnOpponent && !pollHandle) {
-      pollHandle = setInterval(refreshState, 5000);
-    } else if (!waitingOnOpponent && pollHandle) {
-      clearInterval(pollHandle);
-      pollHandle = null;
+    if (state.status !== "playing") {
+      if (pollHandle) { clearInterval(pollHandle); pollHandle = null; pollIntervalMs = null; }
+      return;
+    }
+    const interval = state.current_player === myPlayerIndex ? 5000 : 1000;
+    if (pollIntervalMs !== interval) {
+      if (pollHandle) clearInterval(pollHandle);
+      pollHandle = setInterval(refreshState, interval);
+      pollIntervalMs = interval;
     }
   }
 
@@ -339,12 +433,12 @@
       const state = await apiCall(`/games/${gameId}`);
       render(state);
     } catch (err) {
-      document.getElementById("action-error").textContent = err.message;
+      showMessage(err.message);
     }
   }
 
   async function doMove(direction) {
-    document.getElementById("action-error").textContent = "";
+    clearMessage();
     try {
       const result = await apiCall(`/games/${gameId}/move`, {
         method: "POST",
@@ -352,22 +446,53 @@
         body: JSON.stringify({ player_index: myPlayerIndex, direction }),
       });
       if (!result.ok) {
-        document.getElementById("action-error").textContent = result.error;
+        showMessage(result.error);
       } else {
         render(result.state);
       }
     } catch (err) {
-      document.getElementById("action-error").textContent = err.message;
+      showMessage(err.message);
     }
   }
 
-  // Locks every control in #controls except the Confirm/Undo buttons
-  // themselves, so you can't move or start another fence mid-decision.
+  async function undoLastTurn() {
+    clearMessage();
+    try {
+      const result = await apiCall(`/games/${gameId}/undo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_index: myPlayerIndex }),
+      });
+      if (!result.ok) {
+        showMessage(result.error);
+      } else {
+        lastKnownHistory = result.state.history || []; // don't notify myself about my own undo
+        render(result.state);
+      }
+    } catch (err) {
+      showMessage(err.message);
+    }
+  }
+
+  // One shared spot for errors, undo notices, and the fence-confirm
+  // prompt -- above the board, all styled the same way.
+  function showMessage(text) {
+    const el = document.getElementById("message");
+    el.textContent = text;
+    el.style.display = "block";
+  }
+
+  function clearMessage() {
+    const el = document.getElementById("message");
+    el.textContent = "";
+    el.style.display = "none";
+  }
+
+  // Locks every control in #controls so you can't move or start another
+  // fence mid-decision (Confirm/Cancel live outside #controls now).
   function setControlsDisabled(disabled) {
     document.querySelectorAll("#controls button, #controls input, #controls select").forEach((el) => {
-      if (!el.closest("#fence-confirm")) {
-        el.disabled = disabled;
-      }
+      el.disabled = disabled;
     });
   }
 
@@ -408,14 +533,13 @@
   }
 
   async function doFence() {
-    document.getElementById("action-error").textContent = "";
+    clearMessage();
     const location = parseFenceLocation(
       document.getElementById("fence-row").value,
       document.getElementById("fence-col").value
     );
     if (!location) {
-      document.getElementById("action-error").textContent =
-        'Enter a row and column (e.g. "3" and "B"), or a full location like "B3" in one box.';
+      showMessage('Enter a row and column (e.g. "3" and "B"), or a full location like "B3" in one box.');
       return;
     }
     const { row, col } = location;
@@ -430,29 +554,28 @@
         body: JSON.stringify({ player_index: myPlayerIndex, row, col, orientation }),
       });
       if (!result.ok) {
-        document.getElementById("action-error").textContent = result.error;
+        showMessage(result.error);
         return;
       }
-      // Show the hypothetical result without touching polling -- the
-      // preview state's turn has already "advanced" in the response, but
-      // nothing was actually saved, so polling must stay governed by the
-      // real state, not this preview.
-      renderStatus(result.state);
+      // Pause polling while previewing -- otherwise a poll tick fetches
+      // the real (un-fenced) state mid-preview and overwrites what's shown.
+      if (pollHandle) { clearInterval(pollHandle); pollHandle = null; pollIntervalMs = null; }
+      // Not renderStatus() -- the turn hasn't actually changed yet, only
+      // the board/fence-count preview should update until Confirm.
       renderBoard(result.state);
       renderPlayers(result.state);
       pendingFence = { row, col, orientation };
       const orientationLabel = orientation === "H" ? "Horizontal" : "Vertical";
-      document.getElementById("fence-confirm-text").textContent =
-        `${orientationLabel} fence placed at ${result.location}. Confirm, or cancel?`;
-      document.getElementById("fence-confirm").style.display = "block";
+      showMessage(`${orientationLabel} fence placed at ${result.location}. Confirm, or cancel?`);
+      document.getElementById("fence-confirm-buttons").style.display = "block";
       setControlsDisabled(true);
     } catch (err) {
-      document.getElementById("action-error").textContent = err.message;
+      showMessage(err.message);
     }
   }
 
   async function confirmFence() {
-    document.getElementById("action-error").textContent = "";
+    clearMessage();
     try {
       const result = await apiCall(`/games/${gameId}/fence`, {
         method: "POST",
@@ -462,24 +585,25 @@
       if (!result.ok) {
         // Shouldn't normally happen since preview already validated this,
         // but the board could in principle have changed in between.
-        document.getElementById("action-error").textContent = result.error;
+        showMessage(result.error);
         await refreshState();
       } else {
         render(result.state);
       }
     } catch (err) {
-      document.getElementById("action-error").textContent = err.message;
+      showMessage(err.message);
     } finally {
       pendingFence = null;
-      document.getElementById("fence-confirm").style.display = "none";
+      document.getElementById("fence-confirm-buttons").style.display = "none";
       setControlsDisabled(false);
     }
   }
 
   async function cancelFence() {
     pendingFence = null;
-    document.getElementById("fence-confirm").style.display = "none";
+    document.getElementById("fence-confirm-buttons").style.display = "none";
     setControlsDisabled(false);
+    clearMessage();
     await refreshState(); // nothing was ever saved -- just re-show the real state
   }
 </script>
@@ -580,16 +704,73 @@
     });
   }
 
+  function spawnConfetti() {
+    const container = document.getElementById("confetti-container");
+    const colors = ["#ffd700", "#ff6b6b", "#4ecdc4", "#a78bfa", "#ff9f43"];
+    for (let i = 0; i < 20; i++) {
+      const piece = document.createElement("div");
+      piece.className = "confetti-piece";
+      piece.style.left = `${Math.random() * 100}%`;
+      piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+      piece.style.animationDelay = `${Math.random() * 0.5}s`;
+      piece.style.animationDuration = `${2 + Math.random()}s`;
+      container.appendChild(piece);
+      setTimeout(() => piece.remove(), 3000);
+    }
+  }
+
+  let lastKnownStatus = "playing";
+
   function renderStatus(state) {
     let text;
+    let isMyTurn = false;
+    let isGameOver = false;
     if (state.status === "game_over") {
       text = `${state.winner} wins!`;
+      isGameOver = true;
     } else if (state.current_player === myPlayerIndex) {
       text = "Your Turn";
+      isMyTurn = true;
     } else {
       text = `${state.players[state.current_player].name}'s turn`;
     }
-    document.getElementById("status").textContent = text;
+    if (isGameOver && lastKnownStatus !== "game_over") {
+      spawnConfetti();
+    }
+    lastKnownStatus = state.status;
+    const statusEl = document.getElementById("status");
+    statusEl.textContent = text;
+    statusEl.classList.toggle("my-turn", isMyTurn);
+    statusEl.classList.toggle("game-over", isGameOver);
+  }
+
+  function renderMoveLog(state) {
+    const list = document.getElementById("move-log-list");
+    list.innerHTML = "";
+    (state.history || []).forEach((entry) => {
+      const li = document.createElement("li");
+      const turnLabel = entry.bonus ? `${entry.turn}b` : entry.turn;
+      if (entry.action === "move") {
+        li.textContent = `${turnLabel}. ${entry.player_name} moves ${entry.direction} to ${entry.to_a1}`;
+      } else {
+        const orientationLabel = entry.orientation === "H" ? "horizontal" : "vertical";
+        li.textContent = `${turnLabel}. ${entry.player_name} places ${orientationLabel} fence at ${entry.location_a1}`;
+      }
+      list.appendChild(li);
+    });
+  }
+
+  // Detects an undo by noticing history got shorter than what we last
+  // saw, and names whoever's entry just disappeared.
+  // Only ever shows the message -- hiding it is a separate, explicit step
+  // (clearMessage), triggered by the viewer's own next move.
+  function checkUndoNotice(state) {
+    const newHistory = state.history || [];
+    if (newHistory.length < lastKnownHistory.length) {
+      const undoneEntry = lastKnownHistory[lastKnownHistory.length - 1];
+      showMessage(`${undoneEntry.player_name} undid their last turn.`);
+    }
+    lastKnownHistory = newHistory;
   }
 
   function renderPlayers(state) {
@@ -607,6 +788,8 @@
     renderStatus(state);
     renderBoard(state);
     renderPlayers(state);
+    renderMoveLog(state);
+    checkUndoNotice(state);
     updatePolling(state);
   }
 

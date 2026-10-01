@@ -44,17 +44,8 @@ def save(game_id: str, state: dict) -> None:
 
 
 def undo(game_id: str) -> dict | None:
-    """Restore previous_state back into state. Returns the restored state,
-    or None if there's nothing to undo (either no such game, or this game's
-    last action has already been undone once).
-
-    TODO: not currently called by the fence-confirm flow -- that now uses
-    a validate-without-saving preview instead, since undoing an already
-    -committed action is visible to the opponent before you get a chance
-    to revert it (a real multiplayer bug we hit and fixed). This is kept
-    dormant for a future "undo my completed last turn" feature, which
-    will additionally need a way to notify the opponent it happened, not
-    just rely on their next poll."""
+    """Restore previous_state back into state. None if nothing to undo.
+    Rolls back history too since it's part of the same snapshot."""
     with psycopg.connect(DATABASE_URL) as conn:
         row = conn.execute(
             """

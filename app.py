@@ -15,12 +15,9 @@ import storage
 app = FastAPI()
 storage.init_db()
 
-# TODO: once the frontend has a real hosted address, replace "*" with that
-# specific origin (e.g. "https://quoridor-frontend.onrender.com") instead
-# of allowing every origin.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://quoridor-7oai.onrender.com"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -48,10 +45,17 @@ def serve_frontend():
 
 
 class CreateGameRequest(BaseModel):
-    player1_name: str = Field(min_length=1)
+    player1_name: str
     player2_name: str = Field(min_length=1)
     size: int = 9
     fences: int = 10
+
+    @field_validator("player1_name")
+    @classmethod
+    def validate_player1_name(cls, v):
+        if not v.strip():
+            raise ValueError("Enter at least your own name (in the first box) before creating a game.")
+        return v
 
     @field_validator("size", mode="before")
     @classmethod
@@ -150,13 +154,20 @@ def place_fence(game_id: str, req: FenceRequest):
     return result
 
 
-# TODO: not yet called by the frontend -- kept for a future "undo my
-# completed last turn" feature. See storage.undo()'s docstring for why
-# this isn't what the fence-confirm flow ended up using.
+class UndoRequest(BaseModel):
+    player_index: int
+
 @app.post("/games/{game_id}/undo")
-def undo(game_id: str):
-    load_state_or_404(game_id)  # 404 if the game doesn't exist at all
-    state = storage.undo(game_id)
-    if state is None:
+def undo(game_id: str, req: UndoRequest):
+    # Only the player who actually made the last move/fence can undo it --
+    # otherwise you could revert your opponent's turn instead of your own.
+    state = load_state_or_404(game_id)
+    history = state.get("history", [])
+    if not history:
         return {"ok": False, "error": "Nothing to undo."}
-    return {"ok": True, "state": state}
+    if history[-1]["player_index"] != req.player_index:
+        return {"ok": False, "error": "Can't undo — your opponent made the last move."}
+    new_state = storage.undo(game_id)
+    if new_state is None:
+        return {"ok": False, "error": "Nothing to undo."}
+    return {"ok": True, "state": new_state}
