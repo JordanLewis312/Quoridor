@@ -24,8 +24,7 @@ app.add_middleware(
 
 
 def load_state_or_404(game_id: str) -> dict:
-    """Look up a game's stored state by ID, or raise a clean 404 instead of
-    letting a missing row surface as nothing/None further down."""
+    # Look up a game's stored state by ID, or 404 error message
     state = storage.load(game_id)
     if state is None:
         raise HTTPException(status_code=404, detail=f"No game found with ID '{game_id}'.")
@@ -39,8 +38,7 @@ def health():
 
 @app.get("/")
 def serve_frontend():
-    """Serve the static frontend so the browser and API share one origin
-    (one Render web service, no CORS headaches for the deployed version)."""
+    # Browser and api serve the same static frontend
     return FileResponse(os.path.join(os.path.dirname(__file__), "index.html"))
 
 
@@ -49,7 +47,17 @@ def serve_logo():
     return FileResponse(os.path.join(os.path.dirname(__file__), "logo.svg"))
 
 
-PLAYER_COLORS = {"blue", "red", "green", "yellow", "purple", "orange"}  # hex values live in index.html
+@app.get("/example-board.svg")
+def serve_example_board():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "example-board.svg"))
+
+
+@app.get("/fence-example.svg")
+def serve_fence_example():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "fence-example.svg"))
+
+
+PLAYER_COLORS = {"blue", "red", "green", "yellow", "purple", "orange"}  # hex values in index.html
 
 class CreateGameRequest(BaseModel):
     player1_name: str
@@ -101,8 +109,8 @@ def create_game(req: CreateGameRequest):
     game_id = uuid.uuid4().hex[:8]  # short random id, e.g. "a3f9c21b"
     game = QuoridorGame(req.player1_name, req.player2_name, size=req.size, fences=req.fences,
                         player1_color=req.player1_color, player2_color=req.player2_color)
-    # Seats and board sides are fixed (creator always top, joiner always
-    # bottom), but who moves first is randomized independently of that.
+    # Seats and board sides fixed (creator always top, joiner always on bottom), 
+    # but who moves first is randomized.
     game.current_player = random.choice([0, 1])
     storage.save(game_id, game.serialize())
     return {"game_id": game_id, "state": game.serialize()}
@@ -156,9 +164,8 @@ class FenceRequest(BaseModel):
 
 @app.post("/games/{game_id}/fence/preview")
 def preview_fence(game_id: str, req: FenceRequest):
-    """Validate a fence placement without saving anything -- lets the
-    placing player see a real, legality-checked preview before it becomes
-    visible to their opponent or advances the turn."""
+    # Validate fence placement for preview (but not saving
+    # new gamestate until player confirms)
     game = QuoridorGame.from_state(load_state_or_404(game_id))
     return game.place_fence(req.player_index, req.row, req.col, req.orientation)
 
@@ -177,8 +184,7 @@ class UndoRequest(BaseModel):
 
 @app.post("/games/{game_id}/undo")
 def undo(game_id: str, req: UndoRequest):
-    # Only the player who actually made the last move/fence can undo it --
-    # otherwise you could revert your opponent's turn instead of your own.
+    # Ensure only the player who actually made the last move/fence can undo it --
     state = load_state_or_404(game_id)
     history = state.get("history", [])
     if not history:

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="342" height="180" viewBox="0 0 342 180" font-family="sans-serif" font-weight="bold" font-size="14" fill="#aaa">
+<text x="47.0" y="16.0" text-anchor="middle">A</text>
+<text x="101.0" y="16.0" text-anchor="middle">B</text>
+<text x="155.0" y="16.0" text-anchor="middle">C</text>
+<text x="209.0" y="16.0" text-anchor="middle">D</text>
+<text x="263.0" y="16.0" text-anchor="middle">E</text>
+<text x="317.0" y="16.0" text-anchor="middle">F</text>
+<text x="11.0" y="52.0" text-anchor="middle">1</text>
+<text x="11.0" y="106.0" text-anchor="middle">2</text>
+<text x="11.0" y="160.0" text-anchor="middle">3</text>
+<rect x="23.5" y="23.5" width="317" height="155" fill="#444" stroke="#666" stroke-width="3"/>
+<rect x="25" y="25" width="44" height="44" fill="#C79377"/>
+<rect x="79" y="25" width="44" height="44" fill="#C79377"/>
+<rect x="133" y="25" width="44" height="44" fill="#C79377"/>
+<rect x="187" y="25" width="44" height="44" fill="#C79377"/>
+<rect x="241" y="25" width="44" height="44" fill="#C79377"/>
+<rect x="295" y="25" width="44" height="44" fill="#C79377"/>
+<rect x="25" y="79" width="44" height="44" fill="#C79377"/>
+<rect x="79" y="79" width="44" height="44" fill="#C79377"/>
+<rect x="133" y="79" width="44" height="44" fill="#C79377"/>
+<rect x="187" y="79" width="44" height="44" fill="#C79377"/>
+<rect x="241" y="79" width="44" height="44" fill="#C79377"/>
+<rect x="295" y="79" width="44" height="44" fill="#C79377"/>
+<rect x="25" y="133" width="44" height="44" fill="#C79377"/>
+<rect x="79" y="133" width="44" height="44" fill="#C79377"/>
+<rect x="133" y="133" width="44" height="44" fill="#C79377"/>
+<rect x="187" y="133" width="44" height="44" fill="#C79377"/>
+<rect x="241" y="133" width="44" height="44" fill="#C79377"/>
+<rect x="295" y="133" width="44" height="44" fill="#C79377"/>
+<rect x="133" y="69" width="98" height="10" rx="2" fill="#4da3ff"/>
+<rect x="123" y="79" width="10" height="98" rx="2" fill="#4da3ff"/>
+<line x1="152" y1="108" x2="152.0" y2="89.0" stroke="#1e1e1e" stroke-width="2.5"/><polygon points="152,82 156.2,89.0 147.8,89.0" fill="#1e1e1e"/>
+<rect x="164" y="91" width="156" height="20" rx="4" fill="#1e1e1e"/><text x="170" y="105" font-size="12" fill="#eee" textLength="144" lengthAdjust="spacingAndGlyphs">the C2 horizontal fence</text>
+<line x1="160" y1="155" x2="143.0" y2="155.0" stroke="#1e1e1e" stroke-width="2.5"/><polygon points="136,155 143.0,150.8 143.0,159.2" fill="#1e1e1e"/>
+<rect x="166" y="145" width="142" height="20" rx="4" fill="#1e1e1e"/><text x="172" y="159" font-size="12" fill="#eee" textLength="130" lengthAdjust="spacingAndGlyphs">the C2 vertical fence</text>
+<text x="47" y="161" text-anchor="middle" font-size="16" font-weight="900" fill="#222">A3</text>
+</svg>

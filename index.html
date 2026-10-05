@@ -14,7 +14,7 @@
   }
 
   html {
-    font-size: 14px; /* browser default is 16 -- everything in rem shrinks with it */
+    font-size: 14px;
   }
 
   body {
@@ -31,7 +31,6 @@
     margin: 0.1rem 0; /* shrink large default margin */
   }
 
-  /* logo.svg used as a stencil, so the background color becomes the letter color */
   .logo {
     width: 260px;
     aspect-ratio: 643 / 160;
@@ -52,6 +51,23 @@
 
   h3 {
     margin: 0.3rem 0 0.15rem;
+  }
+
+  /* setup screen: example board on the left, forms on the right */
+  #setup {
+    display: flex;
+    align-items: flex-start;
+    gap: 2rem;
+  }
+  #intro { width: 340px; }
+  #intro summary {
+    cursor: pointer;
+    width: fit-content;
+    margin-top: 0.3rem;
+    padding: 0.3rem 0.8rem;
+    border: 1px solid #666;
+    border-radius: 4px;
+    font-weight: bold;
   }
 
   /* 2x2: settings boxes on top, color dropdowns lined up underneath */
@@ -220,30 +236,49 @@
 
   <!-- Setup: create a new game or join an existing one by ID. Hidden once a game is active. -->
   <div id="setup">
+    <!-- left: example board + optional How to Play -->
+    <div id="intro">
+      <img src="example-board.svg" alt="Example game in progress" width="340">
+      <details>
+        <summary>How to Play</summary>
+        <p>The goal: get yourself to the other side to win. Place fences to slow down
+           your opponent's path and secure your own!</p>
+        <img src="fence-example.svg" alt="Horizontal and vertical C2 fences" width="340">
+        <p>Locations on the board are referred to by their column letter and row number.
+           For example, "A3" refers to the first column, 3rd row from the top.</p>
+        <p>Fences are placed between the squares. They'll start at the edge closer to A1,
+           the TOP LEFT corner. So a horizontal "C2 Fence" will go above C2 and D2,
+           visualized above.</p>
+      </details>
+    </div>
+
+    <!-- right: create / join forms -->
     <div>
-      <h3>Create Game</h3>
-      <input id="new-p1" placeholder="Your Name">
-      <span> vs. </span>
-      <input id="new-p2" placeholder="Opponent's Name (optional)">
-      <br>
-      <h3>Settings (optional)</h3>
-      <div class="settings-grid">
-        <input id="new-size" type="number" placeholder="Size of board (default 9)">
-        <input id="new-fences" type="number" placeholder="# of fences (default 10)">
-        <label>Your color: <select id="new-p1-color"></select></label>
-        <label>Opponent's color: <select id="new-p2-color"></select></label>
+      <div>
+        <h3>Create Game</h3>
+        <input id="new-p1" placeholder="Your Name">
+        <span> vs. </span>
+        <input id="new-p2" placeholder="Opponent's Name (optional)">
+        <br>
+        <h3>Settings (optional)</h3>
+        <div class="settings-grid">
+          <input id="new-size" type="number" placeholder="Size of board (default 9)">
+          <input id="new-fences" type="number" placeholder="# of fences (default 10)">
+          <label>Your color: <select id="new-p1-color"></select></label>
+          <label>Opponent's color: <select id="new-p2-color"></select></label>
+        </div>
+        <br>
+        <button class="primary-btn" onclick="createGame()">Create</button>
       </div>
-      <br>
-      <button class="primary-btn" onclick="createGame()">Create</button>
+      <div style="margin-top:1.2in;">
+        <h3>Join Game</h3>
+        <input id="join-id" placeholder="game id">
+        <input id="join-name" placeholder="Your Name (optional)">
+        <br>
+        <button class="primary-btn" onclick="joinGame()">Join</button>
+      </div>
+      <div id="setup-error" style="color:#ff8080;"></div>
     </div>
-    <div style="margin-top:1.2in;">
-      <h3>Join Game</h3>
-      <input id="join-id" placeholder="game id">
-      <input id="join-name" placeholder="Your Name (optional)">
-      <br>
-      <button class="primary-btn" onclick="joinGame()">Join</button>
-    </div>
-    <div id="setup-error" style="color:#ff8080;"></div>
   </div>
 
   <div id="game" style="display:none;">
